@@ -2,9 +2,11 @@
 
 <!-- hermes-graphify:owned:start:v1 -->
 ## Graphify change guard
-Before modifying code use mcp__graphify_guard__prepare with the session injected by the hook.
-Obtain one-shot file grants before each write. For terminal/execute_code, call mcp__graphify_guard__authorize_execution
-with the exact execution arguments; generic approvals do not authorize commands.
-Use Graphify affected/query for impact context, work in an isolated Git worktree, run tests,
-then call mcp__graphify_guard__finalize to record verification and refresh the graph. Never upload secrets or force-push.
+Load the graphify-context skill before code work. Use Graphify query/affected when available,
+then verify impact against original source and callers. Missing, stale, failed or locked graphs
+are advisory: continue with source searches and tests; do not require an approval MCP server
+or create new permission gates. Work in an isolated Git worktree and run relevant tests.
+After source changes, refresh only this project's graph with the existing Graphify operator.
+Keep implementation code, tests and build configuration under source/. Keep final deliverables
+at the project root. Never upload secrets, change unrelated files or force-push.
 <!-- hermes-graphify:owned:end:v1 -->

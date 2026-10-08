@@ -1,0 +1,8 @@
+name: hermes-plaud
+version: 1.0.0
+description: Manual PLAUD to Obsidian import with full Korean translation.
+author: Gary Lee
+license: MIT
+kind: standalone
+provides_tools: false
+provides_hooks: false
