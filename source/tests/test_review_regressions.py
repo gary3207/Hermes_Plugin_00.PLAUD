@@ -32,7 +32,7 @@ class ReviewTests(unittest.TestCase):
             root = Path(directory)
             vault = root / 'vault'
             vault.mkdir()
-            target = vault / 'Meeting Minutes' / f'{RID}-Transcript.md'
+            target = engine.readable_target(vault / 'Meeting Minutes', FixtureSource().read_record({'id': RID}), 'Transcript')
             class ConcurrentTranslator(FixtureTranslator):
                 def translate(self, units):
                     target.parent.mkdir(parents=True, exist_ok=True)
@@ -59,7 +59,7 @@ class ReviewTests(unittest.TestCase):
             translator = FixtureTranslator()
             translator.cache_identity = 'review-v1'
             engine.sync(settings, FixtureSource(), translator)
-            (vault / 'Meeting Minutes' / f'{RID}-Transcript.md').unlink()
+            next((vault / 'Meeting Minutes').glob('*Transcript.md')).unlink()
             translator.cache_identity = 'review-v2'
             before = translator.calls
             report = engine.sync(settings, FixtureSource(), translator)

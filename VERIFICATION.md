@@ -1,4 +1,14 @@
-# Verification — v1.0.0
+# Verification
+
+## v1.0.1 readable filenames
+
+- 53 offline tests pass, including readable date/time/title/kind naming, lossless legacy rename, unchanged repeat without translation, missing-note cache recovery, changed title rename without duplicates, forbidden characters/length limits, unrelated-note collision protection, duplicate ownership rejection and backed-up offline migration.
+- Filename-only migration leaves original note bytes, translation markers and modification times intact. Full source titles/IDs remain in the note. No guessed timezone conversion is applied.
+- Actual owned notes were migrated with a verified private ZIP backup, then read back byte-for-byte with unchanged modification times and translation markers. No PLAUD or model call was needed for the rename operation.
+- The post-migration live repeat passed with no model calls, no content/mtime changes and no import errors. Missing-file recovery was replayed in a disposable private vault and remained byte-identical.
+- Independent pre-publication review found no introduced blocking security or logic issues and reran all 53 offline tests successfully. The actual v1.0.1 ZIP was extracted and its isolated bootstrap, enablement, fresh CLI discovery, configuration and real MCP handshake passed without copying authentication or modifying the existing Profile.
+
+## v1.0.0 baseline verification
 
 Validated on Windows using Hermes's managed Python 3.14 environment and the official `@plaud-ai/mcp@0.3.14` stdio runtime.
 

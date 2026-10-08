@@ -11,6 +11,19 @@
 - 한국어 원문은 번역을 생략합니다. 영문 제품명 등이 포함된 혼합 문장은 보수적으로 번역할 수 있습니다.
 - 플러그인 소유권이 확인된 결과만 원자적으로 덮어씁니다. 관련 없는 노트는 보호하고, PLAUD에서 삭제된 자료의 노트를 자동 삭제하지 않습니다.
 - 원문이 같으면 정상 번역·렌더 캐시를 재사용합니다. 모델 변경만으로 재번역하지 않습니다.
+- 파일명은 `YYYY-MM-DD HH-MM-SS - 미팅 제목 - Transcript/Summary/Highlights.md`입니다. 내부 ID는 파일명이 아니라 frontmatter에 유지합니다. 같은 이름이 충돌할 때만 짧은 8자리 구분자를 붙입니다.
+- 시각은 원본에 저장된 날짜·시각을 유지하며, 시간대를 추측하여 변환하지 않습니다. 숫자 epoch는 UTC로 해석합니다. 긴 제목은 파일명 길이 제한에 맞게 줄이되 본문·원래 제목은 그대로 유지합니다.
+
+## 기존 암호형 파일명 변경 (v1.0.1)
+
+정상 Import에서도 소유권을 확인한 기존 파일명을 자동 갱신합니다. 원문이 같으면 파일명만 바꾸고 재번역하지 않습니다. 계정·모델 호출 없이 기존 노트만 바꾸려면 설치본 또는 프로젝트의 `rename_notes.py`를 실행합니다.
+
+```text
+<Hermes-Python> -B source/rename_notes.py --home "<HERMES_HOME>" --vault "<vault 절대 경로>" --output "<출력 폴더>"
+<Hermes-Python> -B source/rename_notes.py --home "<HERMES_HOME>" --vault "<vault 절대 경로>" --output "<출력 폴더>" --apply
+```
+
+기본값은 변경 계획만 확인합니다. `--apply`는 소유권·본문 hash·중복·경로를 검증하고, private `plugin-data/hermes-plaud/backups`에 원래 이름·내용의 ZIP을 만든 뒤 이름만 변경합니다. 원문·번역·mtime을 보존하며 관련 없는 노트는 변경하지 않습니다. 중복 소유권이나 본문 수정이 발견되면 중단합니다. private 백업과 `rename-report.json`을 GitHub에 올리지 마세요.
 
 ## 준비
 

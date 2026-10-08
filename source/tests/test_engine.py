@@ -89,9 +89,9 @@ class EngineTests(unittest.TestCase):
             self.assertEqual((changed['updated'], changed['unchanged'], changed['created']), (1, 2, 0))
             self.assertFalse(changed['failed'])
             for target in targets:
-                if target.name.endswith('-Transcript.md') or target.name.endswith('-Highlights.md'):
+                if target.name.endswith(' - Transcript.md') or target.name.endswith(' - Highlights.md'):
                     self.assertEqual((target.read_bytes(), target.stat().st_mtime_ns), before[target.name])
-            missing = next(p for p in targets if p.name.endswith('-Transcript.md'))
+            missing = next(p for p in targets if p.name.endswith(' - Transcript.md'))
             original = missing.read_bytes()
             missing.unlink()  # Only this test-created file inside the temporary vault.
             calls = translator.calls
@@ -101,7 +101,7 @@ class EngineTests(unittest.TestCase):
             self.assertEqual(missing.read_bytes(), original)
             self.assertEqual(translator.calls, calls)
 
-    def test_reuses_exact_legacy_id_filename_instead_of_creating_duplicate(self):
+    def test_migrates_owned_legacy_filename_without_creating_duplicate(self):
         from plaud_obsidian.engine import make_note, sync
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -114,7 +114,10 @@ class EngineTests(unittest.TestCase):
             settings = {"vault": str(vault), "output": "Meeting Minutes", "state": str(root / "state")}
             result = sync(settings, FixtureSource(), FixtureTranslator())
             self.assertEqual(result["updated"], 1)
-            self.assertIn("Keep all 25 servers.", legacy.read_text(encoding="utf-8"))
+            self.assertEqual(result['renamed'], 1)
+            self.assertFalse(legacy.exists())
+            readable = output / '2026-01-01 12-00-00 - Synthetic meeting - Transcript.md'
+            self.assertIn("Keep all 25 servers.", readable.read_text(encoding="utf-8"))
             self.assertFalse((vault / "Meeting Minutes" / f"{RID}-Transcript.md").exists())
 
 

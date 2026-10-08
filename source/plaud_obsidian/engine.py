@@ -1,5 +1,6 @@
 """Manual all-record import; only new, changed or missing output is written."""
 from contextlib import contextmanager
+from datetime import datetime, timezone
 import hashlib
 import json
 import os
@@ -97,16 +98,69 @@ def record_id(value):
     return value
 
 
-def target_path(output, rid, key, existing_index=None):
+def readable_target(output, record, key, existing=None, reserved=()):
+    """Use source wall-clock time, not a guessed timezone conversion."""
+    record_id(record['id'])
     if not re.fullmatch(r"[A-Za-z0-9_-]{1,160}", key):
         raise RuntimeError("INVALID_ARTIFACT_KEY")
-    target = output / f"{rid}-{key}.md"
+    parent = existing.parent if existing is not None else output
+    value = record.get('start_at') or record.get('created_at')
+    try:
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            date = datetime.fromtimestamp(value / 1000 if value > 100000000000 else value, timezone.utc)
+        else:
+            date = datetime.fromisoformat(str(value).replace('Z', '+00:00'))
+        prefix = date.strftime('%Y-%m-%d %H-%M-%S')
+    except (ValueError, TypeError, OverflowError, OSError):
+        prefix = '날짜 미상'
+    title = re.sub(r'[<>:"/\\|?*\x00-\x1f\[\]#^]', ' ', record.get('title') or '제목 없음')
+    title = re.sub(r'\s+', ' ', title).strip(' .') or '제목 없음'
+    suffix = ' - ' + key.split('-')[0]
+    # ponytail: cap path/UTF-8 component length; full title stays in the note.
+    budget = min(200, 240 - len(str(parent.resolve())))
+    limit = budget - len((prefix + ' - ' + suffix + '.md').encode('utf-8')) - 11
+    if limit < 3:
+        raise RuntimeError('OUTPUT_PATH_TOO_LONG')
+    title = title.encode('utf-8')[:limit].decode('utf-8', 'ignore').rstrip(' .')
+    name = prefix + ' - ' + title + suffix
+    target = parent / (name + '.md')
+    if target != existing and (target.exists() or target.is_symlink() or target in reserved):
+        token = digest([record['id'], key])[:8]
+        target = parent / (name + ' (' + token + ').md')
+        if target != existing and (target.exists() or target.is_symlink() or target in reserved):
+            raise RuntimeError('UNRELATED_DESTINATION_EXISTS')
+    if target.is_symlink() or not target.resolve().is_relative_to(output.resolve()):
+        raise RuntimeError('UNSAFE_OUTPUT_PATH')
+    return target
+
+
+def rename_note(old, new, expected):
+    if old == new:
+        return
+    if old.is_symlink() or old.read_bytes() != expected:
+        raise RuntimeError('DESTINATION_CHANGED_DURING_IMPORT')
+    if new.exists() or new.is_symlink():
+        raise RuntimeError('UNRELATED_DESTINATION_EXISTS')
+    if os.name == 'nt':
+        os.rename(old, new)  # Windows rename never replaces an existing destination.
+    else:
+        os.link(old, new)  # Atomic no-clobber; both paths are on the vault filesystem.
+        old.unlink()
+    if new.read_bytes() != expected:
+        raise RuntimeError('OUTPUT_READBACK_FAILED')
+
+
+def target_path(output, rid, key, existing_index=None, record=None):
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,160}", key):
+        raise RuntimeError("INVALID_ARTIFACT_KEY")
     matches = (existing_index or {}).get((rid, key), [])
     if len(matches) > 1:
         raise RuntimeError("MULTIPLE_EXISTING_TARGETS")
     if matches:
         target = matches[0]
-    if target.is_symlink() or not target.resolve().is_relative_to(output):
+    else:
+        target = readable_target(output, record, key) if record is not None else output / f"{rid}-{key}.md"
+    if target.is_symlink() or not target.resolve().is_relative_to(output.resolve()):
         raise RuntimeError("UNSAFE_OUTPUT_PATH")
     return target
 
@@ -119,6 +173,13 @@ def existing_targets(output):
         match = pattern.fullmatch(path.name)
         if match:
             index.setdefault(match.groups(), []).append(path)
+        elif not path.is_symlink() and path.resolve().is_relative_to(output.resolve()):
+            meta, _ = read_note(path.read_bytes())
+            rid, key = meta.get('plaud_record_id'), meta.get('plaud_artifact_key')
+            if (meta.get('plaud_plugin') == 'hermes-plaud' and isinstance(rid, str)
+                    and re.fullmatch(r'(?:of_)?[a-fA-F0-9]{32}', rid) and isinstance(key, str)
+                    and re.fullmatch(r'[A-Za-z0-9_-]{1,160}', key)):
+                index.setdefault((rid, key), []).append(path)
     return index
 
 
@@ -158,7 +219,7 @@ def render(record, artifact, translator):
 def sync(settings, source, translator, progress=None):
     output, state = paths(settings)
     report: dict[str, Any] = dict(records_scanned=0, artifacts_seen=0, created=0, updated=0,
-                  unchanged=0, restored=0, pending=[], failed=[], targets=[])
+                  unchanged=0, restored=0, renamed=0, pending=[], failed=[], targets=[])
     with writer_lock(state):
         target_index = existing_targets(output)
         inventory = source.list_records()
@@ -183,7 +244,7 @@ def sync(settings, source, translator, progress=None):
                     if not isinstance(artifact["text"], str) or not artifact["text"].strip():
                         raise RuntimeError("EMPTY_ARTIFACT")
                     report["artifacts_seen"] += 1
-                    target = target_path(output, rid, artifact["key"], target_index)
+                    target = target_path(output, rid, artifact["key"], target_index, record)
                     source_hash = digest({"format": FORMAT_VERSION, "id": rid,
                                           "translation_policy": translator.cache_identity,
                                           "title": record.get("title", ""),
@@ -194,8 +255,14 @@ def sync(settings, source, translator, progress=None):
                     if existing is not None and (meta.get("plaud_plugin"), meta.get("plaud_record_id"),
                                                 meta.get("plaud_artifact_key")) != ("hermes-plaud", rid, artifact["key"]):
                         raise RuntimeError("UNRELATED_DESTINATION_EXISTS")
+                    named = readable_target(output, record, artifact['key'], target)
                     if (meta.get("plaud_source_sha256") == source_hash
                             and meta.get("plaud_render_sha256") == digest(body.encode("utf-8"))):
+                        if named != target:
+                            rename_note(target, named, existing)
+                            target_index[(rid, artifact['key'])] = [named]
+                            report['renamed'] += 1
+                            report['targets'].append(str(named))
                         report["unchanged"] += 1
                         continue
                     cache = state / "render-cache" / (source_hash + ".md")
@@ -209,10 +276,20 @@ def sync(settings, source, translator, progress=None):
                         data = make_note(record, artifact, source_hash, render(record, artifact, translator))
                         atomic_write(cache, data)
                     output.mkdir(parents=True, exist_ok=True)
-                    target = target_path(output, rid, artifact["key"], target_index)
+                    if (target.is_symlink() or named.is_symlink()
+                            or not target.resolve().is_relative_to(output.resolve())
+                            or not named.resolve().is_relative_to(output.resolve())):
+                        raise RuntimeError('UNSAFE_OUTPUT_PATH')
+                    if named != target and named.exists():
+                        raise RuntimeError('DESTINATION_CHANGED_DURING_IMPORT')
                     if (target.read_bytes() if target.exists() else None) != existing:
                         raise RuntimeError("DESTINATION_CHANGED_DURING_IMPORT")
                     atomic_write(target, data)
+                    if named != target:
+                        rename_note(target, named, data)
+                        report['renamed'] += 1
+                        target = named
+                    target_index[(rid, artifact['key'])] = [target]
                     report["created" if existing is None else "updated"] += 1
                     report["targets"].append(str(target))
             except Exception as exc:
