@@ -8,3 +8,6 @@ __pycache__/
 source/state/
 source/evidence/
 source/worktrees/
+source/.graphify-cache/
+/hermes-plaud-*.zip
+/PLAUD_Setup.md
