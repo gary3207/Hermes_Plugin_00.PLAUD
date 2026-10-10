@@ -9,5 +9,6 @@ source/state/
 source/evidence/
 source/worktrees/
 source/.graphify-cache/
+source/kanban/test-sandboxes/
 /hermes-plaud-*.zip
 /PLAUD_Setup.md

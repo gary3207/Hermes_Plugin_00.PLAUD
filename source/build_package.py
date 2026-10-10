@@ -12,10 +12,12 @@ def main():
     args = parser.parse_args()
     source = Path(__file__).resolve().parent
     root = source.parent
-    files = [root / name for name in ('README.md', 'VERIFICATION.md', 'LICENSE')]
+    files = [root / name for name in ('README.md', 'VERIFICATION.md', 'LICENSE', 'PLAUD_Kanban_사용안내.md')]
     files += [source / 'plugin.yaml', *sorted(source.glob('*.py')),
               *sorted((source / 'plaud_obsidian').glob('*.py')),
               *sorted((source / 'tests').glob('*.py'))]
+    files += [source / 'kanban' / name for name in ('plugin.yaml', '__init__.py',
+              'plaud_kanban.py', 'test_plaud_kanban.py', 'fixture_controller.py', 'fixture_worker.py')]
     assert all(p.is_file() and not p.is_symlink() for p in files)
     output = Path(args.output).resolve()
     output.parent.mkdir(parents=True, exist_ok=True)

@@ -1,5 +1,14 @@
 # Verification
 
+## 2026-10-10 repository synchronization: optional Kanban companion
+
+- The Import engine's production payload remains identical to v1.0.1. The separate `source/kanban` production payload matches the currently installed manual Kanban connector; it does not fork the business engine.
+- Reran 53 engine offline tests and 33 companion offline tests on this Windows host using Hermes's managed Python. All passed. Companion tests use the checked-in engine, not a personal installed-plugin path, and disposable native boards/vaults with synthetic workers.
+- Companion Plugin Doctor passed manifest/import/registration with one dispatch hook and zero tools.
+- The source ZIP builder includes the guide and explicitly allowlisted companion source/tests. ZIP extraction/content readback passed; authenticated data, board state, journals, test sandboxes, private evidence and credentials are excluded.
+- This synchronization does not perform a live PLAUD Import, alter the existing board, change other scheduled jobs or replace the live plugin. Previous v1.0.0/v1.0.1 releases are preserved. A repository installation that includes the companion requires both subdirectory installs.
+- For exact-commit reinstall verification use `source/verify_install.py --repo Gary-Y-Lee/Hermes_Plugin_PLAUD/source --revision <40-character SHA> --kanban` under Hermes's managed Python with `PYTHONPATH=source`. It installs both plugins in a disposable home, bootstraps the real npm/MCP runtime without login, verifies payload bytes and CLI discovery, and checks that an initialized Scheduled card does not start. It never copies the current account's authentication or private state.
+
 ## v1.0.1 readable filenames
 
 - 53 offline tests pass, including readable date/time/title/kind naming, lossless legacy rename, unchanged repeat without translation, missing-note cache recovery, changed title rename without duplicates, forbidden characters/length limits, unrelated-note collision protection, duplicate ownership rejection and backed-up offline migration.

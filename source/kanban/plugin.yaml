@@ -1,0 +1,11 @@
+name: hermes-plaud-kanban
+version: 1.0.0
+description: Explicit manual recurring PLAUD job on one native Kanban board.
+author: Gary Lee
+license: MIT
+kind: standalone
+provides_tools: []
+provides_hooks:
+  - on_kanban_dispatch_tick
+requires_plugins:
+  - hermes-plaud
