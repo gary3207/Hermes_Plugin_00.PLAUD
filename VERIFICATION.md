@@ -3,7 +3,8 @@
 ## 2026-10-10 repository synchronization: optional Kanban companion
 
 - The Import engine's production payload remains identical to v1.0.1. The separate `source/kanban` production payload matches the currently installed manual Kanban connector; it does not fork the business engine.
-- Reran 53 engine offline tests and 33 companion offline tests on this Windows host using Hermes's managed Python. All passed. Companion tests use the checked-in engine, not a personal installed-plugin path, and disposable native boards/vaults with synthetic workers.
+- Reran 53 engine offline tests and 34 companion offline tests on this Windows host using Hermes's managed Python. All passed. Companion tests use the checked-in engine, not a personal installed-plugin path, and disposable native boards/vaults with synthetic workers.
+- The first exact-commit installation was blocked by the native security scanner's high-severity dynamic `os` import finding in a synthetic worker. Replaced that expression with explicit `import os`, added a native install-guard regression test and reran the suite. Both plugin directories now receive the native scanner's `safe` verdict and allow decision without `--force` or disabling scanning; normal subprocess findings remain visible.
 - Companion Plugin Doctor passed manifest/import/registration with one dispatch hook and zero tools.
 - The source ZIP builder includes the guide and explicitly allowlisted companion source/tests. ZIP extraction/content readback passed; authenticated data, board state, journals, test sandboxes, private evidence and credentials are excluded.
 - This synchronization does not perform a live PLAUD Import, alter the existing board, change other scheduled jobs or replace the live plugin. Previous v1.0.0/v1.0.1 releases are preserved. A repository installation that includes the companion requires both subdirectory installs.

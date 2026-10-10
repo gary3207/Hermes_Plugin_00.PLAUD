@@ -1,5 +1,6 @@
 """SYNTHETIC offline subprocess; never invokes PLAUD/auth/LLM/network."""
 import argparse
+import os
 from pathlib import Path
 import sys
 import time
@@ -12,7 +13,7 @@ p.add_argument('--mode', default='success')
 a=p.parse_args()
 run=Path(a.run_dir)
 if a.mode=='startup-fail': sys.exit(7)
-job.save(run/'fixture-debug.json',dict(worker=job.identity(__import__('os').getpid()),gate=job.read(run/'gate.json')))
+job.save(run/'fixture-debug.json',dict(worker=job.identity(os.getpid()),gate=job.read(run/'gate.json')))
 job.await_gate(run)
 for phase in range(1,5):
     job.emit(run, dict(phase=phase, phases=[]))

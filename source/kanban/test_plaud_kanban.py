@@ -79,6 +79,16 @@ class NativeBoardTest(unittest.TestCase):
         self.assertEqual({'after':True},self.job.read(target))
         self.assertEqual(2,len(calls))
 
+    def test_fixture_worker_passes_native_install_guard_without_override(self):
+        import shutil
+        from tools.plugin_guard import scan_plugin, should_allow_plugin_install
+        payload = self.home/'scan-fixture'
+        payload.mkdir()
+        shutil.copy2(Path(__file__).with_name('fixture_worker.py'), payload/'fixture_worker.py')
+        report = scan_plugin(payload)
+        self.assertEqual('safe', report.verdict)
+        self.assertIs(True, should_allow_plugin_install(report)[0])
+
     def test_manual_ready_runs_once_and_regenerates_one_wait(self):
         import sys
         from hermes_cli import kanban_db as db
