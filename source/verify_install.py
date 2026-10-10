@@ -90,7 +90,7 @@ def main():
             journal = json.loads(run(cli + ['plaud-kanban', 'status', '--board', 'default']))
             assert journal['waiting'] == waiting and not journal.get('active')
             card = json.loads(run(cli + ['kanban', '--board', 'default', 'show', waiting, '--json']))
-            assert card['status'] == 'scheduled' and card['current_run_id'] is None
+            assert card['task']['status'] == 'scheduled' and card['runs'] == []
             assert json.loads(run(cli + ['plaud-kanban', 'tick', '--board', 'default']))['spawned'] is False
             result.update(kanban_installation='PASS', kanban_payload_files_equal=len(names),
                           scheduled_wait_no_start='PASS', kanban_account_import_attempted=False)
