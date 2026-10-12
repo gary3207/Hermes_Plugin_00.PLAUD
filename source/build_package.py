@@ -18,6 +18,7 @@ def main():
               *sorted((source / 'tests').glob('*.py'))]
     files += [source / 'kanban' / name for name in ('plugin.yaml', '__init__.py',
               'plaud_kanban.py', 'test_plaud_kanban.py', 'fixture_controller.py', 'fixture_worker.py')]
+    files += [source / 'kanban/skills/plaud-kanban-manual-jobs/SKILL.md']
     assert all(p.is_file() and not p.is_symlink() for p in files)
     output = Path(args.output).resolve()
     output.parent.mkdir(parents=True, exist_ok=True)

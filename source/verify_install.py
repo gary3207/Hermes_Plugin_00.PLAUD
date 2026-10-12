@@ -82,10 +82,18 @@ def main():
             run(cli + ['plugins', 'install', args.repo.rstrip('/') + '/kanban', '--ref', args.revision,
                        '--no-enable', '--yes-deps'])
             companion = home / 'plugins/hermes-plaud-kanban'
-            names = ('plugin.yaml', '__init__.py', 'plaud_kanban.py')
+            names = ('plugin.yaml', '__init__.py', 'plaud_kanban.py',
+                     'skills/plaud-kanban-manual-jobs/SKILL.md')
             assert all((companion / name).read_bytes() == (source / 'kanban' / name).read_bytes() for name in names)
             run(cli + ['plugins', 'enable', 'hermes-plaud-kanban', '--no-allow-tool-override'])
             run(cli + ['plugins', 'doctor', 'hermes-plaud-kanban', '--ci'])
+            skill_probe = run([sys.executable, '-B', '-c',
+                "from pathlib import Path; from hermes_cli.plugins import PluginManager; "
+                "m=PluginManager(); m.discover_and_load(); "
+                "p=m.find_plugin_skill('hermes-plaud-kanban:plaud-kanban-manual-jobs'); "
+                "assert p is not None and p.is_file(); "
+                "print(p.read_text(encoding='utf-8'))"])
+            assert skill_probe.strip() == (source / 'kanban' / names[-1]).read_text(encoding='utf-8').strip()
             waiting = json.loads(run(cli + ['plaud-kanban', 'initialize', '--board', 'default']))['waiting']
             journal = json.loads(run(cli + ['plaud-kanban', 'status', '--board', 'default']))
             assert journal['waiting'] == waiting and not journal.get('active')
@@ -93,6 +101,7 @@ def main():
             assert card['task']['status'] == 'scheduled' and card['runs'] == []
             assert json.loads(run(cli + ['plaud-kanban', 'tick', '--board', 'default']))['spawned'] is False
             result.update(kanban_installation='PASS', kanban_payload_files_equal=len(names),
+                          bundled_skill_resolution='PASS',
                           scheduled_wait_no_start='PASS', kanban_account_import_attempted=False)
     destination = evidence / ('github-install.json' if args.repo else 'local-install.json')
     destination.write_text(json.dumps(result, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')

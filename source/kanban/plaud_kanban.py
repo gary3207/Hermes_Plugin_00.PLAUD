@@ -17,6 +17,11 @@ ASSIGNEE = 'plaud-job'
 WAIT_BODY = 'Scheduled 수동 실행 대기 — Ready로 이동하면 실행. 날짜·자동 타이머 없음. 성공한 노트는 실패·취소 시에도 보존됩니다.'
 
 
+def format_duration(seconds):
+    minutes, milliseconds = divmod(max(0, round(seconds * 1000)), 60000)
+    return f'{minutes}분 {milliseconds / 1000:06.3f}초'
+
+
 def now():
     return datetime.now().astimezone().isoformat(timespec='seconds')
 
@@ -137,6 +142,14 @@ def run_import(engine, config, source, translator, transition, progress=None):
     phases, expected = {}, set()
     current = 0
     began = clock
+    operations=[dict(name='원문 조회',seconds=0,calls=0),dict(name='번역',seconds=0,calls=0)]
+    @contextmanager
+    def measured(index):
+        tick=time.monotonic()
+        try: yield
+        finally:
+            operations[index]['seconds']+=max(0,time.monotonic()-tick)
+            operations[index]['calls']+=1
     def phase(number):
         nonlocal current, began
         if current == number: return
@@ -145,6 +158,7 @@ def run_import(engine, config, source, translator, transition, progress=None):
             phases[current].update(ended=stamp, seconds=time.monotonic()-began)
         current, began = number, time.monotonic()
         phases[number] = dict(phase=number, started=stamp, ended=None, seconds=0)
+        if number==3: phases[number]['operations']=operations
         transition(dict(phase=number, started=started, phase_started_monotonic=began,
                         phases=[dict(p) for p in phases.values()]))
     class Source:
@@ -153,12 +167,16 @@ def run_import(engine, config, source, translator, transition, progress=None):
             return source.list_records()
         def read_record(self, row):
             phase(3)
-            record = source.read_record(row)
+            with measured(0): record = source.read_record(row)
             expected.update((record['id'], a['key']) for a in record['artifacts'])
             return record
     phase(1)
     output, _ = engine.paths(config)
-    report = engine.sync(config, Source(), translator, progress=progress or (lambda r: None))
+    class Translation:
+        cache_identity=translator.cache_identity
+        def translate(self,units):
+            with measured(1): return translator.translate(units)
+    report = engine.sync(config, Source(), Translation(), progress=progress or (lambda r: None))
     if 3 not in phases:
         phases[3] = dict(phase=3, started=None, ended=None, seconds=0, skipped=True)
     phase(4)
@@ -243,12 +261,25 @@ def card_body(active, report):
     lines = [f"**{outcome} · {phase}/4 단계: {names[phase]}**",
              f"시작: {active['started']}"]
     if report.get('ended'):
-        lines.append(f"종료: {report['ended']} · 총 소요: {report.get('seconds',0):.3f}초")
+        lines.append(f"종료: {report['ended']} · 총 소요: {format_duration(report.get('seconds',0))}")
     rows=['| 단계 | 작업 | 소요시간 |','|---|---|---|']
-    for p in report.get('phases',[]):
-        duration='미실행' if p.get('skipped') else ('진행 중' if not report.get('ended') and p['phase']==phase else f"{p.get('seconds',0):.3f}초")
-        rows.append(f"| {p['phase']}/4 | {names[p['phase']]} | {duration} |")
+    timings={p['phase']:p for p in report.get('phases',[])}
+    for number,name in names.items():
+        p=timings.get(number)
+        duration='미보고 / 기록 없음' if p is None or p.get('unreported') else ('미실행' if p.get('skipped') else
+            ('진행 중' if not report.get('ended') and number==phase else format_duration(p.get('seconds',0))))
+        rows.append(f"| {number}/4 | {name} | {duration} |")
+        if number==3:
+            operations=(p or {}).get('operations',[])
+            for child,label in enumerate(('원문 조회','번역'),1):
+                operation=next((o for o in operations if o['name']==label),None)
+                duration=format_duration(operation['seconds']) if operation and operation.get('calls') else '미보고 / 기록 없음'
+                rows.append(f"| 3.{child} | {label} (레코드별 누적) | {duration} |")
+            duration=(format_duration(max(0,p['seconds']-sum(o['seconds'] for o in operations)))
+                if p and p.get('ended') and operations else '미보고 / 기록 없음')
+            rows.append(f"| 3.3 | 기타 레코드 처리 (렌더링·검사·저장 포함) | {duration} |")
     lines.append('\n'.join(rows))
+    lines.append('3.x는 서로 교차하는 레코드별 작업의 누적 시간이며 전역 순차 단계가 아님. 상위 시간에 포함되므로 합산하지 않음. 기록 없음은 미실행을 뜻하지 않음.')
     counts=report.get('counts',{})
     if counts:
         lines += [f"처리 기록: {counts.get('records_scanned',0)} / {counts.get('records_total',0)}",
@@ -288,7 +319,7 @@ def normalize_report(active, report):
         if current in phases and report.get('phase_started_monotonic') is not None:
             phases[current].update(ended=ended,seconds=max(0,time.monotonic()-report['phase_started_monotonic']))
     for number in range(1,5):
-        phases.setdefault(number,dict(phase=number,started=None,ended=None,seconds=0,skipped=True))
+        phases.setdefault(number,dict(phase=number,started=None,ended=None,seconds=0,skipped=True,unreported=True))
     report['phases']=[phases[n] for n in range(1,5)]
     report.setdefault('seconds',max(0,time.monotonic()-active.get('started_monotonic',time.monotonic())))
     report.setdefault('started',active['started'])
@@ -322,7 +353,10 @@ def finish(conn, board, state, journal, active, report):
     card = active_card(conn, journal, active)
     if card:
         if report['outcome'] == 'success':
-            ok = db.complete_task(conn, card.id, result=card_body(active, report), expected_run_id=active['run'])
+            summary = card_body(active, report).splitlines()[0] + ' · 상세: Description.'
+            result = (f"{summary} · 산출물 검증 통과: {report.get('verified',0)}"
+                      f" · 총 소요: {format_duration(report['seconds'])}")
+            ok = db.complete_task(conn, card.id, result=result, summary=summary, expected_run_id=active['run'])
         else:
             ok = sticky_block(conn, card.id, 'PLAUD_'+report['outcome'].upper(), expected_run_id=active['run'])
         if not ok: report['outcome'] = 'cancelled'

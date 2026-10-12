@@ -1,5 +1,14 @@
 # Verification
 
+## 2026-10-12 current configuration and bundled operating Skill
+
+- Compared repository HEAD and remote main with the enabled default-profile plugins. Engine payload (7 files) was identical. The connector's newer duration formatting, record-operation timings, full stage rows and concise Result/Summary publication were missing from the repository and have been synchronized; the adapter implementation now matches the installed file byte-for-byte.
+- Reran 53 engine and 35 connector offline tests successfully under Hermes's managed Python on Windows, using disposable native boards and synthetic workers. Coverage includes operation timings, minute/second display, unreported historical timings, concise native completion fields and recovery without a duplicate completion event.
+- Bundled the portable `plaud-kanban-manual-jobs` operating Skill with native registration, including its trigger description. The disposable-plugin test verifies registration and the actual Skill file; the exact-commit reinstall helper additionally resolves the qualified Skill through a fresh enabled/discovered PluginManager and compares its full content.
+- The explicit connector production payload passed native Plugin Doctor and validation with a safe security scan and no core override. The ZIP allowlist and GitHub reinstall helper include the bundled Skill.
+- Existing private authentication, notes, model settings, live board and installed plugins are not changed by this repository synchronization. The engine remains v1.0.1 and the connector keeps its existing v1.0.0 manifest version; pin the exact repository commit for this synchronized configuration. Earlier release tags/engine ZIPs remain unchanged.
+- Live account Import, Desktop interactions, a fresh OS and Linux/macOS are not exercised by this maintenance. Use the exact-commit reinstall command below for the actual published payload; do not treat offline tests as live account validation.
+
 ## 2026-10-10 repository synchronization: optional Kanban companion
 
 - The Import engine's production payload remains identical to v1.0.1. The separate `source/kanban` production payload matches the currently installed manual Kanban connector; it does not fork the business engine.

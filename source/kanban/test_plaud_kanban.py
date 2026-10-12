@@ -114,6 +114,44 @@ class NativeBoardTest(unittest.TestCase):
         for _ in range(3): self.job.supervise('default', self.state, fixture_command=fixture)
         self.assertEqual(journal['waiting'], self.job.read(self.state/'journal.json')['waiting'])
 
+    def test_success_stores_report_only_in_description_and_recovers_same_run(self):
+        from hermes_cli import kanban_db as db
+        first=self.job.initialize('default',self.state)
+        journal=self.job.read(self.state/'journal.json')
+        directory=self.state/'runs'/('c'*32); directory.mkdir(parents=True)
+        with self.job.connect_closing(board='default') as conn:
+            db.unblock_task(conn,first); claimed=db.claim_task(conn,first)
+            assert claimed is not None
+            active=dict(task=first,run=claimed.current_run_id,token='c'*32,
+                        started=self.job.now(),directory=str(directory))
+            report=dict(outcome='success',seconds=1.25,verified=2,
+                        counts=dict(records_total=3,records_scanned=3,created=2,unchanged=1))
+            self.job.finish(conn,'default',self.state,journal,active,report)
+            for recovery in (False,True):
+                if recovery: self.job.finish(conn,'default',self.state,journal,active,report)
+                card=db.get_task(conn,first)
+                assert card is not None and card.body is not None and card.result is not None
+                run=conn.execute('SELECT * FROM task_runs WHERE id=?',(active['run'],)).fetchone()
+                self.assertEqual('done',card.status)
+                self.assertEqual('completed',run['outcome'])
+                self.assertEqual(first,run['task_id'])
+                self.assertIn('| 단계 |',card.body)
+                self.assertIn('신규 저장: 2',card.body)
+                self.assertIn('산출물 검증 통과: 2',card.body)
+                self.assertIn(active['token'],card.body)
+                for text in (card.result,run['summary']):
+                    self.assertTrue(text)
+                    self.assertNotEqual(card.body,text)
+                    self.assertNotIn('| 단계 |',text)
+                    self.assertNotIn(active['token'],text)
+                    self.assertIn('완료',text)
+                    self.assertIn('Description',text)
+                    self.assertLess(len(text),250)
+                self.assertIn('산출물 검증 통과: 2',card.result)
+                self.assertIn('0분 01.250초',card.result)
+                self.assertEqual(1,conn.execute('SELECT count(*) FROM task_runs').fetchone()[0])
+                self.assertEqual(1,len([e for e in db.list_events(conn,first) if e.kind=='completed']))
+
     def test_cancel_block_stops_owned_child_tree_and_prevents_late_done(self):
         self.cancel_run(False)
     def test_cancel_deletion_preserves_summary_and_regenerates_wait(self):
@@ -130,6 +168,7 @@ class NativeBoardTest(unittest.TestCase):
         self.assertEqual(4,len(normalized['phases']))
         self.assertGreaterEqual(normalized['phases'][2]['seconds'],.1)
         self.assertTrue(normalized['phases'][3]['skipped'])
+        self.assertTrue(normalized['phases'][3]['unreported'])
         self.assertGreaterEqual(normalized['seconds'],.2)
         self.assertEqual(3,normalized['failure_phase'])
     def test_card_text_has_readable_phase_table_and_korean_counts(self):
@@ -141,6 +180,13 @@ class NativeBoardTest(unittest.TestCase):
         self.assertIn('| 단계 |',body)
         self.assertIn('신규 저장: 2',body)
         self.assertIn('완료',body)
+        for stage in ('1/4','2/4','3/4','4/4','3.1','3.2','3.3'):
+            self.assertIn(f'| {stage} |',body)
+        self.assertIn('총 소요: 1분 00.000초',body)
+        self.assertIn('| 2/4 | 목록 조회 | 미보고 / 기록 없음 |',body)
+        self.assertIn('합산하지 않음',body)
+        self.assertEqual('0분 00.000초',self.job.format_duration(-1))
+        self.assertEqual('1분 00.000초',self.job.format_duration(59.9999))
     def test_supervisor_crash_recovery_stops_tree_before_new_wait(self):
         self.cancel_run(False, crash=True)
     def cancel_run(self, delete, crash=False):
@@ -196,6 +242,7 @@ class NativeBoardTest(unittest.TestCase):
         root=Path(__file__).parent
         destination=self.home/'plugins'/'hermes-plaud-kanban'; destination.mkdir(parents=True)
         for name in ('__init__.py','plugin.yaml','plaud_kanban.py'): shutil.copy2(root/name,destination/name)
+        shutil.copytree(root/'skills',destination/'skills')
         original=self.home/'plugins'/'hermes-plaud'; original.mkdir()
         installed=Path(__file__).resolve().parent.parent
         for name in ('__init__.py','plugin.yaml'): shutil.copy2(installed/name,original/name)
@@ -207,6 +254,10 @@ class NativeBoardTest(unittest.TestCase):
         loaded=manager._plugins['hermes-plaud-kanban']
         self.assertTrue(loaded.enabled,loaded.error)
         self.assertIn('on_kanban_dispatch_tick',loaded.hooks_registered)
+        skill=manager._plugin_skills['hermes-plaud-kanban:plaud-kanban-manual-jobs']
+        self.assertEqual(destination/'skills/plaud-kanban-manual-jobs/SKILL.md',skill['path'])
+        self.assertTrue(skill['path'].is_file())
+        self.assertEqual('Use when operating PLAUD Kanban manual Import jobs.',skill['description'])
         plaud=manager._plugins['hermes-plaud']
         ctx=PluginContext(plaud.manifest,manager)
         vault=self.home/'vault'; vault.mkdir()
@@ -478,6 +529,10 @@ class ImportTest(unittest.TestCase):
         self.assertEqual(1, again['verified'])
         self.assertEqual(4, len(again['phases']))
         self.assertTrue(all(p['seconds'] >= 0 for p in again['phases']))
+        operations=report['phases'][2]['operations']
+        self.assertEqual(['원문 조회','번역'],[o['name'] for o in operations])
+        self.assertTrue(all(o['seconds']>=0 and o['calls']>0 for o in operations))
+        self.assertGreaterEqual(report['phases'][2]['seconds'],sum(o['seconds'] for o in operations))
 
     def test_partial_failure_retains_successful_note_and_is_failed(self):
         class Partial(FixtureSource):

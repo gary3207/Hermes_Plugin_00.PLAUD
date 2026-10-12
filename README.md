@@ -9,6 +9,7 @@
 - 두 플러그인은 별도 설치합니다. 기존 엔진만 설치하는 명령은 변경하지 않습니다.
 - Kanban 설치·재구성·취소·검증 방법은 [PLAUD Kanban 사용안내](PLAUD_Kanban_사용안내.md)에 있습니다. 개인 카드·실행 이력·인증은 저장소에서 복원하지 않습니다.
 - 기존 v1.0.1 Release ZIP은 엔진 전용 배포입니다. Kanban 연결까지 재구성하려면 두 설치 경로가 포함된 현재 저장소 commit을 사용하세요. 이전 Release/tag는 변경하지 않습니다.
+- 연결 플러그인에는 현재 운영 스킬 `plaud-kanban-manual-jobs`도 포함됩니다. 활성화한 새 Hermes 세션에서 `hermes-plaud-kanban:plaud-kanban-manual-jobs`로 조회하며, 별도 로컬 스킬 복사나 개인 프로젝트 경로가 필요하지 않습니다.
 
 ## 동작
 
