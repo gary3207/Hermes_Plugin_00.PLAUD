@@ -65,6 +65,8 @@ hermes plaud sync
 
 `--runtime-only`는 이미 설치된 동일 코드의 runtime·설정만 준비합니다. 플러그인 코드를 덮어쓰지 않습니다. Hermes의 모델 설정을 이용하므로 이 플러그인에 별도 모델 API 키를 넣지 않습니다.
 
+npm에서 `UNABLE_TO_VERIFY_LEAF_SIGNATURE`가 발생하면 해당 환경의 인증서 신뢰 문제를 먼저 해결하세요. TLS 검증을 끄지 마세요. 이미 필요한 패키지·의존성이 캐시에 있는 경우에만 명령 범위의 `npm_config_offline=true`로 같은 고정 버전을 준비할 수 있습니다. 이것은 새 PC의 온라인 다운로드 검증을 대신하지 않습니다.
+
 ## ZIP 또는 clone으로 설치
 
 배포 ZIP을 풀거나 저장소를 clone한 폴더에서 실행합니다.

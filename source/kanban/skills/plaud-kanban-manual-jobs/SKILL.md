@@ -59,4 +59,6 @@ Use when reinstalling, configuring, operating, diagnosing or extending the exist
 - Refresh only this project's Graphify graph after source changes; report advisory errors separately. Record actual checks in authored project notes, never credentials or meeting/translation bodies.
 
 ## Pitfalls
+On npm `UNABLE_TO_VERIFY_LEAF_SIGNATURE`, diagnose certificate trust without disabling TLS validation. A command-scoped `npm_config_offline=true` bootstrap can use an already complete cached fixed package/dependency set; label that as cached same-host installation, not fresh-machine online download. A timed-out bootstrap can leave its npm child behind: identify and stop only verification-owned processes before retrying, never unrelated or live business jobs.
+
 `tick` and `reconcile` may start Ready work or perform recovery; use `status` for read-only inspection. Windows connector behavior is tested; Linux/macOS execution is not supported as verified. Git restores functionality and instructions, not private history, caches, notes or authentication. Consult current test output rather than treating historic counts or card IDs as permanent guarantees.
