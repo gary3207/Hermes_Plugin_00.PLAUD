@@ -18,7 +18,7 @@
 그다음 비공개 저장소 접근 권한이 있는 GitHub 계정으로 연결 플러그인을 설치합니다.
 
 ```text
-hermes plugins install Gary-Y-Lee/Hermes_Plugin_PLAUD/source/kanban --no-enable --yes-deps
+hermes plugins install Gary-Y-Lee/Hermes_Plugin_00.PLAUD/source/kanban --no-enable --yes-deps
 hermes plugins enable hermes-plaud-kanban --no-allow-tool-override
 hermes plugins doctor hermes-plaud-kanban --ci
 hermes plaud-kanban status --board default

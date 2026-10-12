@@ -7,6 +7,7 @@
 - Bundled the portable `plaud-kanban-manual-jobs` operating Skill with native registration, including its trigger description. The disposable-plugin test verifies registration and the actual Skill file; the exact-commit reinstall helper additionally resolves the qualified Skill through a fresh enabled/discovered PluginManager and compares its full content.
 - The explicit connector production payload passed native Plugin Doctor and validation with a safe security scan and no core override. The ZIP allowlist and GitHub reinstall helper include the bundled Skill.
 - Existing private authentication, notes, model settings, live board and installed plugins are not changed by this repository synchronization. The engine remains v1.0.1 and the connector keeps its existing v1.0.0 manifest version; pin the exact repository commit for this synchronized configuration. Earlier release tags/engine ZIPs remain unchanged.
+- GitHub readback confirms the private repository's current name is `Gary-Y-Lee/Hermes_Plugin_00.PLAUD`; current installation instructions use that name. Older evidence below retains the original repository identifier.
 - Live account Import, Desktop interactions, a fresh OS and Linux/macOS are not exercised by this maintenance. Use the exact-commit reinstall command below for the actual published payload; do not treat offline tests as live account validation.
 
 ## 2026-10-10 repository synchronization: optional Kanban companion
