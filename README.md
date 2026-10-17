@@ -48,7 +48,7 @@
 이 저장소는 비공개이므로 GitHub 계정에 접근 권한이 있어야 합니다. Git은 해당 계정의 인증된 credential helper를 사용해야 합니다.
 
 ```text
-hermes plugins install Gary-Y-Lee/Hermes_Plugin_00.PLAUD/source --no-enable --yes-deps
+hermes plugins install gary3207/Hermes_Plugin_00.PLAUD/source --no-enable --yes-deps
 ```
 
 정확한 버전으로 재구성하려면 검증된 40자리 commit SHA를 `--ref`에 지정합니다.

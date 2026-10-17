@@ -2,7 +2,7 @@
 name: plaud-kanban-manual-jobs
 description: Use when operating PLAUD Kanban manual Import jobs.
 version: 1.1.0
-author: Gary Lee (Gary-Y-Lee), Hermes Agent
+author: Gary Lee (gary3207), Hermes Agent
 license: MIT
 platforms: [windows]
 metadata:
@@ -16,7 +16,7 @@ metadata:
 Use when reinstalling, configuring, operating, diagnosing or extending the existing PLAUD manual Import integration with native Hermes Kanban. Do not expand this task to other scheduled jobs.
 
 ## Scope and prerequisites
-- Repository: `Gary-Y-Lee/Hermes_Plugin_00.PLAUD` (formerly `Gary-Y-Lee/Hermes_Plugin_PLAUD`). Maintained Import engine: `source/`; Kanban connector and tests: `source/kanban/`. Read root `README.md` and `PLAUD_Kanban_사용안내.md` for installation.
+- Repository: `gary3207/Hermes_Plugin_00.PLAUD`. Maintained Import engine: `source/`; Kanban connector and tests: `source/kanban/`. Read root `README.md` and `PLAUD_Kanban_사용안내.md` for installation.
 - Resolve the selected Profile's actual home with `get_hermes_home()` or `HERMES_HOME`. Engine: `plugins/hermes-plaud/`; connector: `plugins/hermes-plaud-kanban/`.
 - Install both repository subdirectories at the same verified commit. Bootstrap the engine runtime with the Hermes-managed Python, supplying the vault and relative output folder, and explicitly enable both plugins. PLAUD login and Hermes model authentication are separate; never import private authentication, board DB, journals or meeting caches from Git.
 - This Skill is registered by the connector and resolves as `hermes-plaud-kanban:plaud-kanban-manual-jobs`; it does not require copying into user-local skills.
@@ -54,7 +54,7 @@ Use when reinstalling, configuring, operating, diagnosing or extending the exist
 - Connector production payload is plugin.yaml, __init__.py, plaud_kanban.py and the bundled Skill. Keep tests/fixtures in maintained source, not a manual production deployment.
 - Before replacing an enabled live connector, acquire existing controller/job locks and verify no owned execution is active. Never cancel a user-started job to deploy. If the user cancels, confirm controller/worker PID-plus-birth exit; journal active=None alone is insufficient.
 - Enable through native plugins CLI. Read back enablement, exact payload bytes, native qualified Skill resolution and the target board/card. Verify fresh Gateway hook loading separately; enable/reload output is not live-hook proof.
-- For reinstall verification use `source/verify_install.py --repo Gary-Y-Lee/Hermes_Plugin_00.PLAUD/source --revision <exact-commit> --kanban` under the managed Python with `PYTHONPATH=source`. It uses disposable homes and no copied authentication. Same-host isolation is not a fresh OS test.
+- For reinstall verification use `source/verify_install.py --repo gary3207/Hermes_Plugin_00.PLAUD/source --revision <exact-commit> --kanban` under the managed Python with `PYTHONPATH=source`. It uses disposable homes and no copied authentication. Same-host isolation is not a fresh OS test.
 - Leave actual PLAUD login/Import unexecuted unless authorized. Distinguish offline tests, MCP handshake, waiting-card readback and real account/UI validation.
 - Refresh only this project's Graphify graph after source changes; report advisory errors separately. Record actual checks in authored project notes, never credentials or meeting/translation bodies.
 
