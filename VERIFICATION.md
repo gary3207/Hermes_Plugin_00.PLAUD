@@ -1,5 +1,14 @@
 # Verification
 
+## 2026-10-22 current fixes and actual-order presentation
+
+- Verified an exact Git-index snapshot on Windows with Hermes's managed Python: 71 engine tests and 45 connector tests passed, with no skipped tests. Fixtures cover literal `f_` IDs through provider/transport/storage/repeat discovery, constant-only MCP diagnostics, the pinned SDK's offline Aside OAuth contract, task registration, bounded facade recovery, incomplete-source preservation and later repair, Highlights absence, and actual-order card presentation without fabricated child timings.
+- Native `plugins validate --json` returned `ok: true` for both `source` and `source/kanban`; both explicit-path Plugin Doctor checks passed discovery/import/registration. The native install guard reported `safe` and allowed installation for both subtrees without overrides. Private Hermes API imports remain compatibility warnings; this is not a public-API-only plugin. The host's separate source-update warning was not repaired by this maintenance.
+- Connector tests explicitly isolate `HERMES_KANBAN_HOME`, clear inherited DB/workspace/attachment pins, and assert the resolved DB stays inside the disposable home. Error-detail tests locate the checked-in engine independently of test order, and presentation fixtures do not assume the host uses Korea's timezone.
+- The existing source ZIP builder produced 40 allowlisted members. ZIP CRC/member names and every member's bytes were read back against the candidate. No credentials, private evidence, authentication/runtime state, meeting data, board DB, journals or test sandboxes are shipped. The local operator-only historical-card refresh helper is intentionally outside this publication.
+- Production Python modules and manifests match the installed payload after newline normalization; portable operating guidance adds the actual processing plan and preserves the fetched repository-owner correction. The engine remains based on manifest v1.0.1 and the connector on v1.0.0; pin the exact commit rather than assuming old release ZIPs include these fixes.
+- This source publication does not replace live plugins, run Import/login/model calls, refresh live cards or rewrite prior releases. Current-payload remote reinstall/npm bootstrap, fresh-OS installation, Desktop UI behavior and translation semantics were not exercised. Historical installation results below apply only to their recorded revisions, not automatically to this candidate.
+
 ## 2026-10-12 current configuration and bundled operating Skill
 
 - Compared repository HEAD and remote main with the enabled default-profile plugins. Engine payload (7 files) was identical. The connector's newer duration formatting, record-operation timings, full stage rows and concise Result/Summary publication were missing from the repository and have been synchronized; the adapter implementation now matches the installed file byte-for-byte.

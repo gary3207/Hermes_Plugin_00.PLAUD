@@ -56,6 +56,25 @@ hermes plaud-kanban status --board default
 - CLI 종료 코드만으로 성공을 판단하지 않습니다. JSON의 `success: false`, 실제 카드 상태, `active`, 실행 요약의 outcome·failed·verification_errors를 확인하세요.
 - `tick`·`reconcile`은 Ready/복구 대상 작업을 시작하거나 정리할 수 있는 운영 명령입니다. 단순 상태 확인에는 `status`를 사용하세요.
 
+## 카드의 실제 처리 순서
+
+Description과 대기 카드에는 준비(출력 경로·잠금 → 기존 노트 인덱스), 전체 목록 조회, 레코드별 처리(원문 조회 → 기존 노트 변경·미완료·무결성 비교 → 변경 없음 생략 또는 렌더 캐시/조건부 번역 → 안전 저장), 최종 재인덱스·산출물 검증을 표시합니다. 하위 항목은 처리 계획이며 실행 증거가 아닙니다. 실측된 원문 조회·번역은 레코드별 누적이고 상위 시간에 포함됩니다. 측정하지 않은 하위 작업은 `미보고 / 기록 없음`으로 표시하며 시간을 추정하지 않습니다.
+
+## 구체적인 오류와 Aside 재로그인
+
+인식 가능한 MCP 오류는 코드·도구명·안전한 설명·확인된 HTTP 상태를 실행별 `events.jsonl`, `result.json`, `summary.json` 및 카드 Description에 남깁니다. 인증 필요는 `PLAUD_AUTH_REQUIRED`, 호출 제한은 `PLAUD_RATE_LIMITED`, 네트워크 실패는 `PLAUD_NETWORK_ERROR`로 구분합니다. 알려지지 않은 오류는 원문·토큰 노출 방지를 위해 일반 코드로 유지합니다. 과거 실행 로그는 소급해서 바꾸지 않습니다.
+
+인증이 필요하면 Hermes에 PLAUD 재로그인을 요청하세요. Agent는 `hermes plaud login --aside`를 백그라운드로 실행하고 출력된 공식 OAuth URL을 Aside 브라우저에 엽니다. 사용자가 직접 로그인·승인하면 기존 공식 SDK가 PKCE와 localhost:8199 callback으로 인증을 저장합니다. 대기는 10분이며, Agent는 인증 결과와 최소 목록 조회를 확인합니다. 로그인 중 비밀번호·인증코드를 채팅에 보내지 마세요. 실패한 Import나 새 대기 카드는 자동 재실행하지 않습니다.
+
+Aside 연결은 고정된 공식 MCP 0.3.14 SDK를 재사용합니다. 다른 버전의 내부 구조는 임의로 추정하지 않고 실패 처리하며 검토 후 지원합니다. 공식 문서의 `list_files` 검색·날짜 필터는 선택적 기능이므로 전체 Import에는 추가하지 않습니다.
+
+## 번역 연결 복구와 원문 보존
+
+- Summary는 PLAUD 원문을 가져와 번역하며 새로 요약하지 않습니다. `plaud_translation` 전용 auxiliary task는 기본 모델을 그대로 사용하고 무출력 제한만 기본 120초로 분리합니다. 요청 timeout은 180초이고, 의미 있는 출력이 이어지는 스트림의 전체 시간과 같은 뜻은 아닙니다. 운영자의 해당 task 설정이 등록 기본값보다 우선합니다.
+- 일시적인 번역 timeout/연결 오류에는 새 host facade 호출로 한 번만 복구합니다. 인증·권한·형식 오류를 반복 호출하거나 숨기지 않습니다. 모델·기존 12,000자 분할 기준·성공 캐시 identity는 변경하지 않습니다.
+- 복구 실패 시 원문과 가능한 번역을 유지하고 미완료 단위에는 `[원문참조]`를 표시합니다. 노트 frontmatter는 `plaud_translation: "incomplete-transport"`, 본문은 `번역 미완료`로 남고 JOB은 계속 실패/부분실패입니다. 미완료 자료를 성공 번역/렌더 캐시에 넣지 않으며 다음 수동 실행에서 해당 번역을 보완합니다.
+- `${HERMES_HOME}/plugin-data/hermes-plaud/translation-events.jsonl`에는 시도 번호·요청 문자 수·소요시간·재시도 여부만 남깁니다. 원문·번역·자격증명·임의 서버 오류 문구는 기록하지 않습니다. 첫 출력/출력 정지의 상세 시각까지 계측하는 로그는 아닙니다.
+
 ## 오프라인 검증
 
 Hermes 모듈과 의존성을 사용할 수 있는 관리 Python으로 저장소 루트에서 실행합니다.

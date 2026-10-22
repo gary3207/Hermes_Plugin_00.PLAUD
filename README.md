@@ -4,7 +4,7 @@
 
 ## 현재 구조: Import 엔진 + 선택적 Kanban 연결
 
-- `source/`: 기존 `hermes-plaud` Import 엔진 v1.0.1. 원문·번역·캐시·파일명 동작은 그대로 유지합니다.
+- `source/`: `hermes-plaud` Import 엔진 v1.0.1 기반 소스. 인증 진단·`f_` ID 호환·번역 연결 복구와 미완료 원문 보존을 포함하며 정상 번역 캐시·파일명 정책은 유지합니다.
 - `source/kanban/`: 별도 `hermes-plaud-kanban` 연결 플러그인 v1.0.0. 같은 Profile의 엔진을 재사용하며 Scheduled 수동 대기 → Ready 시작 → Running → Done/Blocked 흐름을 관리합니다.
 - 두 플러그인은 별도 설치합니다. 기존 엔진만 설치하는 명령은 변경하지 않습니다.
 - Kanban 설치·재구성·취소·검증 방법은 [PLAUD Kanban 사용안내](PLAUD_Kanban_사용안내.md)에 있습니다. 개인 카드·실행 이력·인증은 저장소에서 복원하지 않습니다.
@@ -98,7 +98,7 @@ hermes plaud sync
 
 ## 개발·검증
 
-구현·테스트·설치·검증 스크립트는 `source/` 아래에 있습니다. 엔진 테스트는 추가 Python 패키지 없이 실행할 수 있습니다. Kanban 테스트는 Hermes 모듈과 해당 관리 Python의 의존성을 사용합니다.
+구현·테스트·설치·검증 스크립트는 `source/` 아래에 있습니다. 두 테스트 suite 모두 Hermes 모듈과 해당 관리 Python의 의존성을 사용합니다. 외부 계정·모델 호출 없이 합성 자료와 임시 home/board로 검증합니다.
 
 ```text
 PYTHONPATH=source python -B -m unittest discover -s source/tests -v

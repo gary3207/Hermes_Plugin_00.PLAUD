@@ -1,5 +1,6 @@
 """Bounded, read-only JSON-lines client for the pinned official PLAUD server."""
 import json
+from http import HTTPStatus
 import os
 from pathlib import Path
 import queue
@@ -11,12 +12,58 @@ import time
 
 READ_TOOLS = frozenset({'list_files', 'get_file', 'get_note', 'get_transcript', 'get_current_user'})
 MAX_RESPONSE_BYTES = 16 * 1024 * 1024
+RECORD_ID_PATTERN = r'(?:of_|f_)?[a-fA-F0-9]{32}'
 
 
-def unwrap(result):
+class MCPToolError(RuntimeError):
+    """Only constant diagnostics escape the untrusted MCP error boundary."""
+    DETAILS = {
+        'MCP_TOOL_ERROR': 'PLAUD MCP tool failed; no recognized safe diagnostic.',
+        'PLAUD_AUTH_REQUIRED': 'PLAUD authentication required; log in to the configured MCP account.',
+        'PLAUD_HTTP_ERROR': 'PLAUD API request failed.',
+        'PLAUD_RATE_LIMITED': 'PLAUD rate limit reached; retry later.',
+        'PLAUD_NETWORK_ERROR': 'PLAUD network request failed; check connectivity and retry.',
+    }
+
+    def __init__(self, result, tool=None):
+        code, text, self.status = 'MCP_TOOL_ERROR', '', None
+        content = result.get('content') if isinstance(result, dict) else None
+        if (isinstance(content, list) and len(content) == 1 and isinstance(content[0], dict)
+                and content[0].get('type') == 'text' and isinstance(content[0].get('text'), str)):
+            # Pinned 0.3.14 wrappers; never forward describeError text or its causes.
+            match = re.fullmatch(r'Failed to (?:list files|get file|get note|get transcript|get user info): (.+)',
+                                 content[0]['text'])
+            text = match.group(1) if match else ''
+        if text == 'Error: Not authenticated. Please login first.':
+            code = 'PLAUD_AUTH_REQUIRED'
+        elif text == 'TypeError: fetch failed':
+            code = 'PLAUD_NETWORK_ERROR'
+        for status in HTTPStatus:
+            if status >= 400 and text == f'Error: API error: {status.value} {status.phrase}':
+                self.status = status.value
+                code = ('PLAUD_AUTH_REQUIRED' if status == 401 else
+                        'PLAUD_RATE_LIMITED' if status == 429 else 'PLAUD_HTTP_ERROR')
+                break
+        super().__init__(code)
+        self.code = code
+        self.tool = tool if isinstance(tool, str) and tool in READ_TOOLS else None
+
+    @property
+    def diagnostic(self):
+        diagnostic = {'code': self.code, 'message': self.DETAILS[self.code], 'tool': self.tool}
+        if self.status is not None:
+            diagnostic.update(status=self.status, retryable=self.status in {408, 429} or self.status >= 500)
+        if self.code == 'PLAUD_NETWORK_ERROR':
+            diagnostic['retryable'] = True
+        if self.code == 'PLAUD_AUTH_REQUIRED':
+            diagnostic.update(auth_required=True, retryable=False)
+        return diagnostic
+
+
+def unwrap(result, tool=None):
     """Only the exact randomized recording-data tag ends an untrusted block."""
     if not isinstance(result, dict) or result.get('isError'):
-        raise RuntimeError('MCP_TOOL_ERROR')
+        raise MCPToolError(result, tool)
     content = result.get('content')
     if (not isinstance(content, list) or len(content) != 1 or
             not isinstance(content[0], dict) or content[0].get('type') != 'text'):
@@ -159,7 +206,7 @@ class MCPTransport:
             raise ValueError('MCP_ARGUMENT_SCHEMA')
         if name in {'get_file', 'get_note', 'get_transcript'}:
             file_id = arguments.get('file_id')
-            if not isinstance(file_id, str) or not re.fullmatch(r'(?:of_)?[a-fA-F0-9]{32}', file_id):
+            if not isinstance(file_id, str) or not re.fullmatch(RECORD_ID_PATTERN, file_id):
                 raise ValueError('PLAUD_ID_INVALID')
         for key, minimum, maximum in (('page', 1, 10000), ('page_size', 10, 100), ('limit', 1, 500)):
             if key in arguments:
@@ -180,7 +227,7 @@ class MCPTransport:
             success = any(item.get('type') == 'text' and item.get('text') in
                           {'Already logged in.', 'Successfully authenticated with Plaud!'} for item in messages)
             return {'authenticated': success}
-        return unwrap(result)
+        return unwrap(result, tool=name)
 
     def close(self):
         self.stopping.set()

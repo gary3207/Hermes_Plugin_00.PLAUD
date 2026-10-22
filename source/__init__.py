@@ -11,7 +11,7 @@ if str(Path(__file__).parent) not in sys.path:
     sys.path.insert(0, str(Path(__file__).parent))
 from plaud_obsidian.engine import paths, safe_error, sync
 from plaud_obsidian.provider import NativePlaud
-from plaud_obsidian.translation import Translator
+from plaud_obsidian.translation import Translator, register_task
 
 
 class Parser(argparse.ArgumentParser):
@@ -26,7 +26,10 @@ def parser(existing=None):
     configure.add_argument('--vault', required=True)
     configure.add_argument('--output', required=True)
     for name in ('status', 'login', 'sync'):
-        commands.add_parser(name, add_help=False)
+        command = commands.add_parser(name, add_help=False)
+        if name == 'login':
+            command.add_argument('--aside', action='store_true',
+                                 help='Emit an OAuth URL for the Aside browser and wait for user approval')
     return p
 
 
@@ -53,6 +56,9 @@ def execute(ctx, args):
                                'manual_only': True, 'runtime_installed': (Path(config['runtime']) /
                                'node_modules/@plaud-ai/mcp/package.json').is_file()}, ensure_ascii=False)
         paths(config)
+        if args.action == 'login' and getattr(args, 'aside', False):
+            from plaud_obsidian.aside_login import run_login
+            return json.dumps({'authenticated': run_login(config) == 0})
         with NativePlaud(config) as source:
             if args.action == 'login':
                 return json.dumps(source.login())
@@ -64,6 +70,7 @@ def execute(ctx, args):
 
 
 def register(ctx):
+    register_task(ctx)
     def command(raw_args):
         try:
             # posix=False preserves Windows backslashes; strip surrounding quotes only.

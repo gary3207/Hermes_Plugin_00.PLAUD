@@ -9,8 +9,15 @@ import re
 import tempfile
 from typing import Any
 from .documents import label, render_appendix, render_transcript
+from .mcp_transport import MCPToolError, RECORD_ID_PATTERN
 
 FORMAT_VERSION = 1
+
+
+class TranslationUnavailable(RuntimeError):
+    def __init__(self, rows):
+        super().__init__('TRANSLATION_TRANSPORT_UNAVAILABLE')
+        self.rows = rows
 
 
 def digest(value):
@@ -87,13 +94,29 @@ def writer_lock(state):
                 fcntl.flock(stream, fcntl.LOCK_UN)
 
 
+def error_diagnostic(exc) -> dict[str, Any]:
+    """Only known boundary diagnostics or exact local codes; never arbitrary attributes."""
+    if isinstance(exc, MCPToolError):
+        return exc.diagnostic
+    if isinstance(exc, TranslationUnavailable):
+        return dict(code='TRANSLATION_TRANSPORT_UNAVAILABLE', tool=None, retryable=True,
+                    message='번역 모델 연결 복구에 실패했습니다. 원문 저장과 번역 완료 여부를 확인하세요.')
+    if (type(exc), str(exc)) in ((ValueError, 'PLAUD_ID_INVALID'), (RuntimeError, 'INVALID_RECORD_ID')):
+        return dict(code=str(exc), tool=None, retryable=False,
+                    message='Invalid PLAUD record ID: expected 32 hexadecimal characters, optionally prefixed with f_ or of_. IDs are not normalized.')
+    return {}
+
+
 def safe_error(exc):
+    diagnostic = error_diagnostic(exc)
+    if diagnostic:
+        return diagnostic['code'] + ': ' + diagnostic['message']
     code = str(exc)
     return code if re.fullmatch(r"[A-Z][A-Z0-9_]{2,100}", code) else type(exc).__name__
 
 
 def record_id(value):
-    if not isinstance(value, str) or not re.fullmatch(r"(?:of_)?[a-fA-F0-9]{32}", value):
+    if not isinstance(value, str) or not re.fullmatch(RECORD_ID_PATTERN, value):
         raise RuntimeError("INVALID_RECORD_ID")
     return value
 
@@ -167,8 +190,8 @@ def target_path(output, rid, key, existing_index=None, record=None):
 
 def existing_targets(output):
     index = {}
-    pattern = re.compile(r"(?:\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}-)?"
-                         r"((?:of_)?[a-fA-F0-9]{32})-([A-Za-z0-9_-]{1,160})\.md")
+    pattern = re.compile(r"(?:\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}-)?("
+                         + RECORD_ID_PATTERN + r")-([A-Za-z0-9_-]{1,160})\.md")
     for path in output.rglob("*.md"):
         match = pattern.fullmatch(path.name)
         if match:
@@ -177,18 +200,19 @@ def existing_targets(output):
             meta, _ = read_note(path.read_bytes())
             rid, key = meta.get('plaud_record_id'), meta.get('plaud_artifact_key')
             if (meta.get('plaud_plugin') == 'hermes-plaud' and isinstance(rid, str)
-                    and re.fullmatch(r'(?:of_)?[a-fA-F0-9]{32}', rid) and isinstance(key, str)
+                    and re.fullmatch(RECORD_ID_PATTERN, rid) and isinstance(key, str)
                     and re.fullmatch(r'[A-Za-z0-9_-]{1,160}', key)):
                 index.setdefault((rid, key), []).append(path)
     return index
 
 
-def make_note(record, artifact, source_hash, body):
+def make_note(record, artifact, source_hash, body, translation_pending=False):
     meta = {"plaud_plugin": "hermes-plaud", "plaud_record_id": record["id"],
             "plaud_artifact_key": artifact["key"], "plaud_kind": artifact["kind"],
             "plaud_source_sha256": source_hash, "plaud_render_sha256": digest(body.encode("utf-8")),
             "plaud_format_version": FORMAT_VERSION,
-            "plaud_translation": "full-translation-unreviewed", "title": record.get("title", ""),
+            "plaud_translation": "incomplete-transport" if translation_pending else "full-translation-unreviewed",
+            "title": record.get("title", ""),
             "recorded_at": record.get("start_at") or record.get("created_at", "")}
     header = "---\n" + "\n".join(f"{k}: {json.dumps(v, ensure_ascii=False)}" for k, v in meta.items()) + "\n---\n\n"
     return (header + body).encode("utf-8")
@@ -207,10 +231,15 @@ def read_note(data):
 
 
 def render(record, artifact, translator):
+    units = artifact['units'] if artifact['kind'] == 'Transcript' else [{'id': '0', 'text': artifact['text']}]
+    return render_rows(record, artifact, translator.translate(units))
+
+
+def render_rows(record, artifact, rows):
     if artifact["kind"] == "Transcript":
-        content = render_transcript(artifact["units"], translator.translate(artifact["units"]))
+        content = render_transcript(artifact["units"], rows)
     else:
-        content = render_appendix(artifact["text"], translator.translate([{"id": "0", "text": artifact["text"]}]))
+        content = render_appendix(artifact["text"], rows)
     return (f"# {label(record.get('title') or record['id'])} — {artifact['kind']}\n\n"
             f"**녹음 시각:** {label(record.get('start_at') or record.get('created_at', '알 수 없음'))}\n\n"
             + content)
@@ -257,6 +286,7 @@ def sync(settings, source, translator, progress=None):
                         raise RuntimeError("UNRELATED_DESTINATION_EXISTS")
                     named = readable_target(output, record, artifact['key'], target)
                     if (meta.get("plaud_source_sha256") == source_hash
+                            and meta.get('plaud_translation') != 'incomplete-transport'
                             and meta.get("plaud_render_sha256") == digest(body.encode("utf-8"))):
                         if named != target:
                             rename_note(target, named, existing)
@@ -273,8 +303,18 @@ def sync(settings, source, translator, progress=None):
                                 saved_meta.get("plaud_render_sha256") != digest(saved_body.encode("utf-8"))):
                             raise RuntimeError("CACHE_INTEGRITY_FAILED")
                     else:
-                        data = make_note(record, artifact, source_hash, render(record, artifact, translator))
-                        atomic_write(cache, data)
+                        translation_pending = False
+                        try:
+                            body = render(record, artifact, translator)
+                        except TranslationUnavailable as exc:
+                            translation_pending = True
+                            body = render_rows(record, artifact, exc.rows)
+                            body += '\n\n> [!warning] 번역 미완료\n> 원문은 보존했습니다. 다음 실행에서 미완료 번역을 다시 시도합니다.\n'
+                            report['failed'].append(dict(record_id=rid, error=safe_error(exc),
+                                                         diagnostic=error_diagnostic(exc)))
+                        data = make_note(record, artifact, source_hash, body, translation_pending=translation_pending)
+                        if not translation_pending:
+                            atomic_write(cache, data)
                     output.mkdir(parents=True, exist_ok=True)
                     if (target.is_symlink() or named.is_symlink()
                             or not target.resolve().is_relative_to(output.resolve())
@@ -293,7 +333,11 @@ def sync(settings, source, translator, progress=None):
                     report["created" if existing is None else "updated"] += 1
                     report["targets"].append(str(target))
             except Exception as exc:
-                report["failed"].append({"record_id": rid, "error": safe_error(exc)})
+                failure = {"record_id": rid, "error": safe_error(exc)}
+                diagnostic = error_diagnostic(exc)
+                if diagnostic:
+                    failure['diagnostic'] = diagnostic
+                report["failed"].append(failure)
             report["records_scanned"] += 1
             save_json(state / "last-report.json", report)
             if progress:

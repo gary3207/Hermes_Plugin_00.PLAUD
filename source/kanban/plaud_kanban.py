@@ -14,12 +14,45 @@ JOB = 'plaud-import-v1'
 CREATOR = 'hermes-plaud-kanban'
 TENANT = 'plaud-manual'
 ASSIGNEE = 'plaud-job'
-WAIT_BODY = 'Scheduled 수동 실행 대기 — Ready로 이동하면 실행. 날짜·자동 타이머 없음. 성공한 노트는 실패·취소 시에도 보존됩니다.'
+STAGES = {1:'준비', 2:'목록 조회', 3:'원문 조회·번역·저장 (레코드별)', 4:'산출물 검증'}
+STEPS = {
+    1: ('출력·상태 경로 및 쓰기 잠금 준비', 'Obsidian 기존 노트 인덱스'),
+    2: ('PLAUD 전체 목록 조회 및 ID·중복 검사',),
+    3: ('레코드 원문 조회', '기존 노트 변경·미완료·무결성 검사',
+        '변경 없음이면 번역·저장 생략', '렌더 캐시 검사·재사용',
+        '캐시 미스 시 조건부 번역', '렌더링·안전 검사·저장'),
+    4: ('최종 Obsidian 재인덱스', '최종 산출물 소유권·경로·무결성 검증'),
+}
+ORDER_NOTE = ('하위 항목은 실행 증거가 아닌 처리 계획이며, 미보고 / 기록 없음은 미실행을 뜻하지 않음. '
+              '1.2는 PLAUD 목록 조회 전의 기존 노트 탐색이고 3.2는 원문 조회 후 번역 전 비교, 4.x는 처리 후 최종 검증임. '
+              '3.x는 레코드·자료별 반복/조건 분기이며 전역 순차 단계가 아님. '
+              '3.2에서 원문 hash·번역 미완료 여부·본문 무결성을 비교하고, 변경 없으면 3.3에서 생략(필요 시 이름만 변경). '
+              '그 외에는 3.4의 유효한 렌더 캐시를 재사용하거나, 캐시 미스 시 3.5에서 한국어·번역 캐시를 확인해 필요한 단위만 번역한 뒤 3.6에서 렌더 결과를 안전하게 저장. '
+              '측정된 원문 조회·번역은 레코드별 누적이며 상위 시간에 포함되므로 합산하지 않음.')
+WAIT_BODY = ('Scheduled 수동 실행 대기 — Ready로 이동하면 실행. 날짜·자동 타이머 없음. 성공한 노트는 실패·취소 시에도 보존됩니다.\n\n'
+             + '\n'.join(line for number,name in STAGES.items()
+                         for line in (f'{number}/4 {name}', *(f'{number}.{child} {label}' for child,label in enumerate(STEPS[number],1))))
+             + '\n\n' + ORDER_NOTE)
 
 
 def format_duration(seconds):
     minutes, milliseconds = divmod(max(0, round(seconds * 1000)), 60000)
     return f'{minutes}분 {milliseconds / 1000:06.3f}초'
+
+
+def display_time(iso):
+    """Match Scheduled Job display without adding a cross-plugin dependency."""
+    try:
+        at=datetime.fromisoformat(iso).astimezone()
+    except (ValueError,TypeError,OverflowError):
+        return str(iso) if iso else '기록 없음'
+    noon='오전' if at.hour<12 else '오후'
+    return f'{at.year}년 {at.month}월 {at.day}일 {noon} {at.hour%12 or 12}시 {at.minute}분 {at.second}초'
+
+
+def unavailable_counts(items):
+    return dict(highlights_unavailable=len({p['record_id'] for p in items if p['kind']=='Highlights: unavailable'}),
+                other_unavailable=sum(p['kind']!='Highlights: unavailable' for p in items))
 
 
 def now():
@@ -202,7 +235,9 @@ def run_import(engine, config, source, translator, transition, progress=None):
                 phases=[phases[k] for k in sorted(phases)], verified=verified,
                 verification_errors=failures,
                 counts={k:report.get(k,0) for k in ('records_total','records_scanned','created','updated','unchanged','restored','renamed')},
-                failed=[r['error'] for r in report['failed']], pending=len(report['pending']))
+                failed=[r['error'] for r in report['failed']], pending=len(report['pending']),
+                errors=[r['diagnostic'] for r in report['failed'] if r.get('diagnostic')],
+                **unavailable_counts(report['pending']))
 
 
 def identity(pid):
@@ -255,13 +290,13 @@ def active_card(conn, journal, active):
 
 
 def card_body(active, report):
-    names = {1:'준비', 2:'목록 조회', 3:'원문 조회·번역·저장 (레코드별)', 4:'산출물 검증'}
+    names = STAGES
     phase=report.get('phase',report.get('failure_phase',4))
     outcome={'success':'정상 완료','failed':'실패','cancelled':'사용자 취소 / 실행 중단'}.get(report.get('outcome'),'실행 중')
     lines = [f"**{outcome} · {phase}/4 단계: {names[phase]}**",
-             f"시작: {active['started']}"]
+             f"시작: {display_time(active['started'])}"]
     if report.get('ended'):
-        lines.append(f"종료: {report['ended']} · 총 소요: {format_duration(report.get('seconds',0))}")
+        lines.append(f"종료: {display_time(report['ended'])} · 총 소요: {format_duration(report.get('seconds',0))}")
     rows=['| 단계 | 작업 | 소요시간 |','|---|---|---|']
     timings={p['phase']:p for p in report.get('phases',[])}
     for number,name in names.items():
@@ -269,26 +304,41 @@ def card_body(active, report):
         duration='미보고 / 기록 없음' if p is None or p.get('unreported') else ('미실행' if p.get('skipped') else
             ('진행 중' if not report.get('ended') and number==phase else format_duration(p.get('seconds',0))))
         rows.append(f"| {number}/4 | {name} | {duration} |")
-        if number==3:
-            operations=(p or {}).get('operations',[])
-            for child,label in enumerate(('원문 조회','번역'),1):
-                operation=next((o for o in operations if o['name']==label),None)
-                duration=format_duration(operation['seconds']) if operation and operation.get('calls') else '미보고 / 기록 없음'
-                rows.append(f"| 3.{child} | {label} (레코드별 누적) | {duration} |")
-            duration=(format_duration(max(0,p['seconds']-sum(o['seconds'] for o in operations)))
-                if p and p.get('ended') and operations else '미보고 / 기록 없음')
-            rows.append(f"| 3.3 | 기타 레코드 처리 (렌더링·검사·저장 포함) | {duration} |")
+        operations=(p or {}).get('operations',[]) if number==3 else []
+        for child,label in enumerate(STEPS[number],1):
+            operation_name={1:'원문 조회',5:'번역'}.get(child) if number==3 else None
+            operation=next((o for o in operations if o['name']==operation_name),None)
+            duration=format_duration(operation['seconds']) if operation and operation.get('calls') else '미보고 / 기록 없음'
+            suffix=' (레코드별 누적)' if operation_name else ''
+            rows.append(f"| {number}.{child} | {label}{suffix} | {duration} |")
     lines.append('\n'.join(rows))
-    lines.append('3.x는 서로 교차하는 레코드별 작업의 누적 시간이며 전역 순차 단계가 아님. 상위 시간에 포함되므로 합산하지 않음. 기록 없음은 미실행을 뜻하지 않음.')
+    lines.append(ORDER_NOTE)
+    processing=timings.get(3)
+    operations=(processing or {}).get('operations',[])
+    if processing and processing.get('ended') and operations:
+        remainder=format_duration(max(0,processing['seconds']-sum(o['seconds'] for o in operations)))
+        lines.append(f'기타 레코드 처리 누적: {remainder} (3단계에서 측정된 원문 조회·번역을 뺀 잔여 시간; 검사·캐시·렌더링·저장 포함, 개별 저장 시간 아님).')
     counts=report.get('counts',{})
     if counts:
         lines += [f"처리 기록: {counts.get('records_scanned',0)} / {counts.get('records_total',0)}",
                   f"신규 저장: {counts.get('created',0)} · 갱신: {counts.get('updated',0)} · 변경 없음: {counts.get('unchanged',0)} · 이름 변경: {counts.get('renamed',0)}"]
     if report.get('ended'):
         lines += [f"산출물 검증 통과: {report.get('verified',0)}",
-                  f"실패: {', '.join(report.get('failed',[])+report.get('verification_errors',[])) or '없음'} · 미제공 자료: {report.get('pending',0)}",
+                  f"실패: {', '.join(report.get('failed',[])+report.get('verification_errors',[])) or '없음'}",
                   '성공한 노트는 유지됩니다.']
+        if 'highlights_unavailable' in report:
+            lines.append(f"Highlights 없는 기록: {report['highlights_unavailable']}개 (정상 생략·실패 아님)")
+            if report.get('other_unavailable'):
+                lines.append(f"그 외 원문 미제공: {report['other_unavailable']}건")
+        elif report.get('pending'):
+            lines.append(f"원문 미제공: {report['pending']}건 (종류 미기록; Highlights 없음은 정상)")
+        lines.append('Highlights가 없는 녹음은 정상이며 실패로 집계하지 않습니다.')
         if report['outcome']=='cancelled': lines.append('집계는 마지막으로 완료한 기록 기준이며, 중단 당시 진행 중이던 기록의 저장분은 일부 미집계일 수 있습니다.')
+    for detail in report.get('errors',[]):
+        status=f" · HTTP {detail['status']}" if detail.get('status') else ''
+        lines.append(f"오류 상세: {detail['code']} · 도구: {detail.get('tool') or '미확인'}{status} · {detail['message']}")
+        if detail.get('auth_required'):
+            lines.append('조치: 이 채팅에서 PLAUD 재로그인을 요청하세요. Aside 브라우저에서 로그인·승인을 완료한 뒤 목록 접근을 확인합니다. 실패 JOB은 자동 재실행하지 않습니다.')
     lines += [f"로그/독립 요약: `{active['directory']}`",
               f"JOB: {JOB} · run: {active['run']} · correlation: {active['token']}"]
     return '\n\n'.join(lines)
@@ -370,7 +420,7 @@ def finish(conn, board, state, journal, active, report):
                      and old and old.status=='blocked' and report.get('native_finalized'))
         if not completed and not blocked: report['outcome']='cancelled'
     prefix = {'success':'완료','failed':'실패','cancelled':'취소'}[report['outcome']]
-    edit_run_card(conn,journal,active,title=f"[{prefix}] PLAUD Import · {active['started']}",
+    edit_run_card(conn,journal,active,title=f"[{prefix}] PLAUD Import · {display_time(active['started'])}",
                   body=card_body(active,report),terminal=True)
     save(Path(active['directory'])/'summary.json', report)
     journal['cards'][active['task']]['role'] = 'history'
@@ -477,7 +527,7 @@ def supervise(board='default', state=None, fixture_command=None):
         last_event = {'phase':1,'phases':[]}
         with connect_closing(board=board) as conn:
             adopt_worker_pid(conn, task.id, active['run'], active['worker']['pid'])
-            edit_run_card(conn,journal,active,title=f"[실행 중] PLAUD Import · {active['started']}",
+            edit_run_card(conn,journal,active,title=f"[실행 중] PLAUD Import · {display_time(active['started'])}",
                           body=card_body(active,{'phase':1}))
             try:
                 while proc.poll() is None:
@@ -536,6 +586,10 @@ def stop_owned(active, scope=None, proc=None):
 
 def diagnostic(run_dir, component, exc):
     import traceback
+    try:
+        from plaud_obsidian.engine import error_diagnostic
+    except ImportError:
+        error_diagnostic=lambda exc: {}
     causes=[]
     seen=set()
     while exc is not None and id(exc) not in seen:
@@ -543,8 +597,11 @@ def diagnostic(run_dir, component, exc):
         causes.append(dict(error_class=type(exc).__name__,errno=getattr(exc,'errno',None),
                            frames=[dict(file=Path(f.filename).name,function=f.name,line=f.lineno)
                                    for f in traceback.extract_tb(exc.__traceback__)]))
+        detail=error_diagnostic(exc)
+        if detail: causes[-1]['detail']=detail
         exc=exc.__cause__ or exc.__context__
     emit(run_dir,dict(timestamp=now(),component=component,causes=causes,diagnostic=True))
+    return [cause['detail'] for cause in causes if cause.get('detail')]
 
 
 def safe_code(exc):
@@ -618,9 +675,9 @@ def worker(run_dir, runtime=None):
         report['phases'][0]['started']=started
         if report['outcome']=='failed': report['failure_phase']=3 if report['failed'] else 4
     except Exception as exc:
-        diagnostic(run_dir,'worker',exc)
+        details=diagnostic(run_dir,'worker',exc)
         report=dict(last,outcome='failed',started=started,ended=now(),seconds=time.monotonic()-clock,
-                    failed=[safe_code(exc)],failure_phase=last['phase'])
+                    failed=[safe_code(exc)],failure_phase=last['phase'],errors=details)
     save(run_dir/'result.json',report)
     return report
 

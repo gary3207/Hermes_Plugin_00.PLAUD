@@ -3,11 +3,11 @@ import hashlib
 import json
 import math
 import re
-from .mcp_transport import MCPTransport
+from .mcp_transport import MCPTransport, RECORD_ID_PATTERN
 
 
 MAX_PAGES = 10000
-ID_PATTERN = re.compile(r'(?:of_)?[a-fA-F0-9]{32}\Z')
+ID_PATTERN = re.compile(RECORD_ID_PATTERN + r'\Z')
 
 
 def valid_id(value):

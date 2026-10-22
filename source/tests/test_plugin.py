@@ -11,6 +11,7 @@ class Context:
     def __init__(self):
         self.values = {}
         self.commands = {}
+        self.tasks = {}
         self.llm = None
     def get_config(self, key, default=None):
         return self.values.get(key, default)
@@ -20,9 +21,26 @@ class Context:
         self.commands[name] = handler
     def register_cli_command(self, name, help, setup_fn, handler_fn, **kwargs):
         self.cli = (name, setup_fn, handler_fn)
+    def register_auxiliary_task(self, key, **kwargs):
+        self.tasks[key] = kwargs
 
 
 class PluginTests(unittest.TestCase):
+    def test_aside_login_does_not_start_import_or_default_browser(self):
+        import json
+        entry = Path(__file__).resolve().parents[1]/'__init__.py'
+        spec = importlib.util.spec_from_file_location('plaud_aside_entry_test',entry)
+        assert spec is not None and spec.loader is not None
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        args = module.parser().parse_args(['login','--aside'])
+        with patch.object(module,'settings',return_value={'state':'fixture'}), \
+                patch.object(module,'paths'), patch.object(module,'NativePlaud') as source, \
+                patch('plaud_obsidian.aside_login.run_login',return_value=0) as login:
+            self.assertEqual({'authenticated':True},json.loads(module.execute(Context(),args)))
+            login.assert_called_once_with({'state':'fixture'})
+            source.assert_not_called()
+
     def test_register_configure_status_and_bad_command(self):
         entry = Path(__file__).resolve().parents[1] / '__init__.py'
         self.assertTrue(entry.is_file(), 'Plugin entry missing')

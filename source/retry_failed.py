@@ -4,11 +4,11 @@ import json
 from pathlib import Path
 import shutil
 
-from hermes_cli.plugins import PluginContext, PluginManager
+from hermes_cli.plugins import PluginContext, discover_plugins, get_plugin_manager
 from hermes_cli.plugins_manifest import parse_manifest_file
 from plaud_obsidian.engine import digest, existing_targets, paths, read_note, save_json, sync, target_path
 from plaud_obsidian.provider import NativePlaud
-from plaud_obsidian.translation import Translator
+from plaud_obsidian.translation import Translator, register_task
 
 
 def main():
@@ -29,7 +29,9 @@ def main():
     node = shutil.which('node')
     if node is None:
         raise RuntimeError('NODE_RUNTIME_MISSING')
-    context = PluginContext(manifest, PluginManager())
+    discover_plugins()
+    context = PluginContext(manifest, get_plugin_manager())
+    register_task(context)
     settings = {'state': str(state), 'runtime': str(state / 'runtime'),
                 'node': str(Path(node).resolve()),
                 'vault': args.vault, 'output': args.output}

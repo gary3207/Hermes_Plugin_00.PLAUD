@@ -13,8 +13,13 @@ class NativeBoardTest(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(dir=SCRATCH)
         self.home = Path(self.temp.name)
-        self.env = patch.dict(os.environ, {'HERMES_HOME': str(self.home), 'HERMES_KANBAN_BOARD':'default'})
+        self.env = patch.dict(os.environ, {
+            'HERMES_HOME': str(self.home), 'HERMES_KANBAN_HOME': str(self.home),
+            'HERMES_KANBAN_BOARD': 'default', 'HERMES_KANBAN_DB': '',
+            'HERMES_KANBAN_WORKSPACES_ROOT': '', 'HERMES_KANBAN_ATTACHMENTS_ROOT': ''})
         self.env.start()
+        from hermes_cli import kanban_db as db
+        self.assertTrue(db.kanban_db_path(board='default').resolve().is_relative_to(self.home.resolve()))
         import plaud_kanban as job
         self.job = job
         self.state = self.home / 'private'
@@ -99,6 +104,9 @@ class NativeBoardTest(unittest.TestCase):
         journal = self.job.read(self.state/'journal.json')
         with self.job.connect_closing(board='default') as conn:
             self.assertEqual('done', db.get_task(conn, first).status, str([(p.name,p.read_text(encoding='utf-8')) for p in (self.state/'runs').glob('*/*.json')]))
+            card=db.get_task(conn,first)
+            assert card is not None
+            self.assertRegex(card.title,r'\d{4}년 \d{1,2}월 \d{1,2}일 (오전|오후)')
             self.assertNotEqual(first, journal['waiting'])
             self.assertEqual('scheduled', db.get_task(conn, journal['waiting']).status)
             self.assertEqual(2, len(db.list_tasks(conn)))
@@ -517,6 +525,19 @@ class ImportTest(unittest.TestCase):
         self.config = dict(vault=str(root/'vault'), output='notes', state=str(root/'state'))
         self.source = FixtureSource()
     def tearDown(self): self.temp.cleanup()
+    def test_missing_highlights_is_normal_and_counted_by_record(self):
+        class NoHighlights(FixtureSource):
+            def read_record(self,row):
+                record=super().read_record(row)
+                record['pending']=['Highlights: unavailable','Highlights: unavailable']
+                return record
+        report=self.job.run_import(self.engine,self.config,NoHighlights(),FixtureTranslator(),lambda e:None)
+        self.assertEqual('success',report['outcome'])
+        self.assertEqual([],report['failed'])
+        self.assertEqual([],report['verification_errors'])
+        self.assertEqual(1,report['highlights_unavailable'])
+        self.assertEqual(0,report['other_unavailable'])
+
     def test_real_engine_success_no_change_verified_with_phase_only_updates(self):
         events = []
         report = self.job.run_import(self.engine, self.config, self.source, FixtureTranslator(), events.append)

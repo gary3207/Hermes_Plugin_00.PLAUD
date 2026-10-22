@@ -4,5 +4,5 @@ description: Manual PLAUD to Obsidian import with full Korean translation.
 author: Gary Lee
 license: MIT
 kind: standalone
-provides_tools: false
-provides_hooks: false
+provides_tools: []
+provides_hooks: []
