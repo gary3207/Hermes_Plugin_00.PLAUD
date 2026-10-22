@@ -2,6 +2,7 @@
 
 ## 2026-10-22 current fixes and actual-order presentation
 
+- Fresh publication readback identifies the repository as `gary3207/Hermes_Plugin_00.PLAUD`, default branch `main`, currently public. Repository visibility was not changed by this update; older private-repository statements below are historical results.
 - Verified an exact Git-index snapshot on Windows with Hermes's managed Python: 71 engine tests and 45 connector tests passed, with no skipped tests. Fixtures cover literal `f_` IDs through provider/transport/storage/repeat discovery, constant-only MCP diagnostics, the pinned SDK's offline Aside OAuth contract, task registration, bounded facade recovery, incomplete-source preservation and later repair, Highlights absence, and actual-order card presentation without fabricated child timings.
 - Native `plugins validate --json` returned `ok: true` for both `source` and `source/kanban`; both explicit-path Plugin Doctor checks passed discovery/import/registration. The native install guard reported `safe` and allowed installation for both subtrees without overrides. Private Hermes API imports remain compatibility warnings; this is not a public-API-only plugin. The host's separate source-update warning was not repaired by this maintenance.
 - Connector tests explicitly isolate `HERMES_KANBAN_HOME`, clear inherited DB/workspace/attachment pins, and assert the resolved DB stays inside the disposable home. Error-detail tests locate the checked-in engine independently of test order, and presentation fixtures do not assume the host uses Korea's timezone.

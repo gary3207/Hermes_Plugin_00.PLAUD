@@ -45,7 +45,7 @@
 
 ## GitHub에서 설치
 
-이 저장소는 비공개이므로 GitHub 계정에 접근 권한이 있어야 합니다. Git은 해당 계정의 인증된 credential helper를 사용해야 합니다.
+현재 저장소는 공개이며 소스 조회에는 계정 인증이 필요하지 않습니다. GitHub 접근 정책에 따라 인증이 필요한 환경에서는 해당 계정의 credential helper를 사용하세요. PLAUD·모델 인증은 소스 다운로드와 별개입니다.
 
 ```text
 hermes plugins install gary3207/Hermes_Plugin_00.PLAUD/source --no-enable --yes-deps
