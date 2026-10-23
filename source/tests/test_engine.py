@@ -48,7 +48,7 @@ class EngineTests(unittest.TestCase):
             source, translator = FixtureSource(), FixtureTranslator()
             first = sync(settings, source, translator)
             self.assertEqual(first["created"], 3)
-            paths = sorted((vault / "Meeting Minutes").glob("*.md"))
+            paths = sorted((vault / "Meeting Minutes").rglob("*.md"))
             self.assertEqual(len(paths), 3)
             for path in paths:
                 body = path.read_text(encoding="utf-8")
@@ -63,7 +63,7 @@ class EngineTests(unittest.TestCase):
             source.text = "Keep all 25 servers. Do not change the deployment date."
             changed = sync(settings, source, translator)
             self.assertEqual(changed["updated"], 3)
-            self.assertEqual(len(list((vault / "Meeting Minutes").glob("*.md"))), 3)
+            self.assertEqual(len(list((vault / "Meeting Minutes").rglob("*.md"))), 3)
             for path in paths:
                 self.assertIn(source.text, path.read_text(encoding="utf-8"))
 

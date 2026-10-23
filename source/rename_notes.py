@@ -9,7 +9,7 @@ from plaud_obsidian.engine import (digest, existing_targets, paths, read_note,
                                   target_path, writer_lock)
 
 
-def migrate(settings, apply=False):
+def migrate(settings, apply=False, folders=False):
     output, state = paths(settings)
     with writer_lock(state):
         index = existing_targets(output)
@@ -27,7 +27,14 @@ def migrate(settings, apply=False):
             if target_path(output, rid, key, index) != old:
                 raise RuntimeError('MULTIPLE_EXISTING_TARGETS')
             record = {'id': rid, 'title': meta.get('title'), 'start_at': meta.get('recorded_at')}
-            new = readable_target(output, record, key, old, reserved)
+            if folders:
+                new = readable_target(output, record, key).parent / old.name
+                if new.is_symlink() or not new.resolve().is_relative_to(output):
+                    raise RuntimeError('UNSAFE_OUTPUT_PATH')
+                if new != old and (new.exists() or new in reserved):
+                    raise RuntimeError('UNRELATED_DESTINATION_EXISTS')
+            else:
+                new = readable_target(output, record, key, old, reserved)
             reserved.add(new)
             plan.append((old, new, data, old.stat().st_mtime_ns))
         changed = [entry for entry in plan if entry[0] != entry[1]]
@@ -46,13 +53,15 @@ def migrate(settings, apply=False):
                 assert all(archive.read(old.relative_to(output).as_posix()) == data
                            for old, _, data, _ in changed)
             for old, new, data, _ in changed:
+                new.parent.mkdir(parents=True, exist_ok=True)
                 rename_note(old, new, data)
         if apply:
             assert all(new.read_bytes() == data and new.stat().st_mtime_ns == mtime
                        for _, new, data, mtime in plan), 'RENAME_VERIFICATION_FAILED'
             assert all(not old.exists() for old, _, _, _ in changed)
         result = {'checked': len(plan), 'renamed' if apply else 'planned': len(changed),
-                  'content_changed': 0, 'model_calls': 0, 'backup': str(backup) if backup else None,
+                  'content_changed': 0, 'model_calls': 0, 'folders': folders,
+                  'backup': str(backup) if backup else None,
                   'paths': [{'old': str(old), 'new': str(new), 'sha256': digest(data)}
                             for old, new, data, _ in changed]}
         if apply:
@@ -66,9 +75,10 @@ def main():
     parser.add_argument('--vault', required=True)
     parser.add_argument('--output', required=True)
     parser.add_argument('--apply', action='store_true', help='Default is a read-only plan.')
+    parser.add_argument('--folders', action='store_true', help='Move into date folders, preserving filenames.')
     args = parser.parse_args()
     result = migrate({'vault': args.vault, 'output': args.output,
-                      'state': str(Path(args.home).resolve() / 'plugin-data/hermes-plaud')}, args.apply)
+                      'state': str(Path(args.home).resolve() / 'plugin-data/hermes-plaud')}, args.apply, args.folders)
     print(json.dumps({k: v for k, v in result.items() if k != 'paths'}, ensure_ascii=False))
 
 

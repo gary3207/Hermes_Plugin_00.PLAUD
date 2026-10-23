@@ -134,8 +134,12 @@ def readable_target(output, record, key, existing=None, reserved=()):
         else:
             date = datetime.fromisoformat(str(value).replace('Z', '+00:00'))
         prefix = date.strftime('%Y-%m-%d %H-%M-%S')
+        if existing is None:
+            parent = output / f'{date.year:04d}' / f'{date.month:02d}'
     except (ValueError, TypeError, OverflowError, OSError):
         prefix = '날짜 미상'
+        if existing is None:
+            parent = output / prefix
     title = re.sub(r'[<>:"/\\|?*\x00-\x1f\[\]#^]', ' ', record.get('title') or '제목 없음')
     title = re.sub(r'\s+', ' ', title).strip(' .') or '제목 없음'
     suffix = ' - ' + key.split('-')[0]

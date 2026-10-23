@@ -117,14 +117,14 @@ class RecoveryTests(unittest.TestCase):
             self.assertEqual(len(first['failed']), 1)
             self.assertTrue(first['failed'][0]['error'].startswith('TRANSLATION_TRANSPORT_UNAVAILABLE'))
             output = root/'vault/notes'
-            summary = next(output.glob('*Summary.md'))
+            summary = next(output.rglob('*Summary.md'))
             meta, body = read_note(summary.read_bytes())
             self.assertEqual(meta['plaud_translation'], 'incomplete-transport')
             self.assertIn('Summary: Keep all 25 servers.', body)
             self.assertIn('[원문참조]', body)
             self.assertIn('번역 미완료', body)
             self.assertEqual(len(list((root/'state/render-cache').glob('*.md'))), 2)
-            neighbors = {p: (p.read_bytes(), p.stat().st_mtime_ns) for p in output.glob('*.md') if p != summary}
+            neighbors = {p: (p.read_bytes(), p.stat().st_mtime_ns) for p in output.rglob('*.md') if p != summary}
             unavailable[0] = False
             repaired = sync(settings, Source(), translator)
             self.assertFalse(repaired['failed'])

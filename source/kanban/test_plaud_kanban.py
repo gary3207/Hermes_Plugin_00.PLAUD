@@ -565,7 +565,7 @@ class ImportTest(unittest.TestCase):
         self.assertEqual('failed',report['outcome'])
         self.assertEqual(['SYNTHETIC_READ_FAILED'],report['failed'])
         self.assertEqual(1,report['verified'])
-        self.assertEqual(1,len(list((Path(self.config['vault'])/'notes').glob('*.md'))))
+        self.assertEqual(1,len(list((Path(self.config['vault'])/'notes').rglob('*.md'))))
     def test_empty_inventory_marks_processing_not_run(self):
         class Empty(FixtureSource):
             def list_records(self): return []
@@ -575,7 +575,7 @@ class ImportTest(unittest.TestCase):
         self.assertEqual(0,report['phases'][2]['seconds'])
     def test_artifact_body_hash_tamper_is_rejected(self):
         report=self.job.run_import(self.engine,self.config,self.source,FixtureTranslator(),lambda e:None)
-        target=next((Path(self.config['vault'])/'notes').glob('*.md'))
+        target=next((Path(self.config['vault'])/'notes').rglob('*.md'))
         original=self.engine.sync
         def tampering(*args,**kwargs):
             result=original(*args,**kwargs)

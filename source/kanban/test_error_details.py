@@ -46,7 +46,7 @@ class ErrorDetailTest(unittest.TestCase):
             assert isinstance(failures, list)
             self.assertIn('TRANSLATION_TRANSPORT_UNAVAILABLE', failures[0])
             self.assertEqual(len(calls), 2)
-            note = next((root/'vault/notes').glob('*.md')).read_text()
+            note = next((root/'vault/notes').rglob('*.md')).read_text()
             self.assertIn('Keep all 25 servers.', note)
             self.assertIn('번역 미완료', note)
             self.assertNotIn('PRIVATE_MESSAGE_MUST_NOT_LEAK', (run/'events.jsonl').read_text())

@@ -59,7 +59,7 @@ class ReviewTests(unittest.TestCase):
             translator = FixtureTranslator()
             translator.cache_identity = 'review-v1'
             engine.sync(settings, FixtureSource(), translator)
-            next((vault / 'Meeting Minutes').glob('*Transcript.md')).unlink()
+            next((vault / 'Meeting Minutes').rglob('*Transcript.md')).unlink()
             translator.cache_identity = 'review-v2'
             before = translator.calls
             report = engine.sync(settings, FixtureSource(), translator)

@@ -49,7 +49,7 @@ class ReadableTitleTests(unittest.TestCase):
             engine.sync(settings, FixtureSource(), FixtureTranslator())
             result = engine.sync(settings, RenamedSource(), FixtureTranslator())
             self.assertFalse(result['failed'])
-            files = list((root / 'vault/Meeting Minutes').glob('*.md'))
+            files = list((root / 'vault/Meeting Minutes').rglob('*.md'))
             self.assertEqual(len(files), 3)
             self.assertTrue(all('New meeting title' in p.name for p in files))
 
@@ -59,11 +59,12 @@ class ReadableTitleTests(unittest.TestCase):
             record = {'id': RID, 'title': '../회의: "검토" / [결정] # ^ ? * | ' + '긴제목' * 200,
                       'start_at': '2026-10-08T10:59:29.703000'}
             target = engine.readable_target(output, record, 'Transcript')
-            self.assertEqual(target.parent, output)
+            self.assertEqual(target.parent, output / '2026' / '10')
             self.assertLessEqual(len(target.name.encode('utf-8')), 200)
             self.assertTrue(target.name.startswith('2026-10-08 10-59-29 - '))
             for char in '<>:"/\\|?*[]#^':
                 self.assertNotIn(char, target.name)
+            target.parent.mkdir(parents=True)
             target.write_bytes(b'Unrelated personal note')
             alternative = engine.readable_target(output, record, 'Transcript')
             self.assertNotEqual(target, alternative)

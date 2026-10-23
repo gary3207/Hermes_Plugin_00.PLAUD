@@ -1,5 +1,12 @@
 # Verification
 
+## 2026-10-23 year/month folders
+
+- New notes route through the shared filename/date parser into `YYYY/MM/`; unknown dates use `날짜 미상/`. Source wall-clock dates and existing-note locations are retained. Recursive indexing and final Kanban verification recognize organized notes without a second index or cache-identity change.
+- The optional `source/rename_notes.py --folders` migration preserves filenames, contents and modification times, verifies a private ZIP backup before moving, rejects conflicting destinations, and has a zero-change repeat. Normal imports do not automatically relocate old notes.
+- The Windows offline engine suite passed 74 tests and the connector suite passed 45 tests. New checks cover ISO offsets, UTC epoch seconds/milliseconds, creation-date fallback, unknown dates, new-note routing, existing flat-note preservation and backed-up one-time migration/reindex/repeat. Tests use synthetic data and disposable vaults; no account or model request is needed.
+- The installed engine's bytes were independently compared with the maintained source; a synthetic installed-engine save/repeat and an explicitly authorized local-note migration were verified separately. Private meeting data, migration manifests, backups and operation logs are not part of this source publication. This update does not run Import, replace the live plugin, change GitHub visibility or rewrite earlier release assets. Fresh-machine/online npm installation and live account import remain unverified for this revision.
+
 ## 2026-10-22 current fixes and actual-order presentation
 
 - Fresh publication readback identifies the repository as `gary3207/Hermes_Plugin_00.PLAUD`, default branch `main`, currently public. Repository visibility was not changed by this update; older private-repository statements below are historical results.

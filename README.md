@@ -21,6 +21,7 @@
 - 플러그인 소유권이 확인된 결과만 원자적으로 덮어씁니다. 관련 없는 노트는 보호하고, PLAUD에서 삭제된 자료의 노트를 자동 삭제하지 않습니다.
 - 원문이 같으면 정상 번역·렌더 캐시를 재사용합니다. 모델 변경만으로 재번역하지 않습니다.
 - 파일명은 `YYYY-MM-DD HH-MM-SS - 미팅 제목 - Transcript/Summary/Highlights.md`입니다. 내부 ID는 파일명이 아니라 frontmatter에 유지합니다. 같은 이름이 충돌할 때만 짧은 8자리 구분자를 붙입니다.
+- 신규 노트는 출력 폴더 아래 녹음 날짜의 `YYYY/MM/`에 저장합니다. 예: `Meeting Minutes/2026/10/`. 날짜를 알 수 없으면 `날짜 미상/`에 저장합니다. 기존 노트는 자동 이동하지 않고 발견한 위치에서 갱신합니다.
 - 시각은 원본에 저장된 날짜·시각을 유지하며, 시간대를 추측하여 변환하지 않습니다. 숫자 epoch는 UTC로 해석합니다. 긴 제목은 파일명 길이 제한에 맞게 줄이되 본문·원래 제목은 그대로 유지합니다.
 
 ## 기존 암호형 파일명 변경 (v1.0.1)
@@ -33,6 +34,17 @@
 ```
 
 기본값은 변경 계획만 확인합니다. `--apply`는 소유권·본문 hash·중복·경로를 검증하고, private `plugin-data/hermes-plaud/backups`에 원래 이름·내용의 ZIP을 만든 뒤 이름만 변경합니다. 원문·번역·mtime을 보존하며 관련 없는 노트는 변경하지 않습니다. 중복 소유권이나 본문 수정이 발견되면 중단합니다. private 백업과 `rename-report.json`을 GitHub에 올리지 마세요.
+
+## 기존 노트를 연도·월 폴더로 한 번만 정리
+
+실행 중인 PLAUD Job/Import가 없을 때 저장소 루트에서 실행합니다. `--folders`는 파일명을 바꾸지 않고 저장된 녹음 날짜의 `YYYY/MM/` 폴더로 이동합니다. 날짜를 알 수 없으면 `날짜 미상/`을 사용합니다.
+
+```text
+<Hermes-Python> -B source/rename_notes.py --home "<HERMES_HOME>" --vault "<vault 절대 경로>" --output "<출력 폴더>" --folders
+<Hermes-Python> -B source/rename_notes.py --home "<HERMES_HOME>" --vault "<vault 절대 경로>" --output "<출력 폴더>" --folders --apply
+```
+
+첫 명령은 이동 계획만 확인합니다. `--apply`는 기존 private ZIP 백업·소유권·경로·충돌 검사를 그대로 사용하며 파일명·내용·수정 시각을 보존합니다. 다시 실행하면 이미 정리된 노트는 이동하지 않습니다. Import·재번역·자동 스케줄을 실행하지 않으며 관련 없는 노트는 변경하지 않습니다.
 
 ## 준비
 
