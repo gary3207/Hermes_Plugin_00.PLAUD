@@ -54,7 +54,8 @@ def _request(auth, endpoint, *, refresh=False):
         raise ImageWebError('IMAGE_WEB_API_FAILED') from None
     try:
         result = json.loads(raw)
-        if isinstance(result, dict) and type(result.get('status')) is int and result['status'] == 401:
+        # Workspace token expiry can arrive inside an HTTP 200 envelope.
+        if isinstance(result, dict) and type(result.get('status')) is int and result['status'] in (401, -419):
             raise _Unauthorized
         if not isinstance(result, dict) or type(result.get('status')) is not int or result['status'] != 0:
             raise ValueError

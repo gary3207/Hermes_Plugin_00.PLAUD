@@ -111,6 +111,9 @@ class APITests(FixtureCase):
         variants = [self.detail('f_' + 'c' * 32), self.detail(card='c_' + 'c' * 32),
                     {'status': 0, 'data': {}}, {'status': 1, 'message': 'ARTIFICIAL-ACCESS-SECRET'},
                     {'status': False, 'data': self.detail()['data']},
+                    {'status': '-419', 'message': 'ARTIFICIAL-ACCESS-SECRET'},
+                    {'status': 403, 'message': 'ARTIFICIAL-ACCESS-SECRET'},
+                    {'status': 429, 'message': 'ARTIFICIAL-ACCESS-SECRET'},
                     {'status': 0, 'data': {'meta': {'file_id': RID}, 'relation_content_mapping': {CARD: 'https://evil.invalid/secret'}}}]
         for reply in variants:
             with self.subTest(reply=reply):
@@ -162,6 +165,19 @@ class APITests(FixtureCase):
         self.assertEqual(saved['refresh_token'], previous['refresh_token'])
         self.assertEqual(saved['refresh_expires_at'], previous['refresh_expires_at'])
 
+    def test_workspace_expiry_envelope_refreshes_before_local_ttl(self):
+        api = self.boot()
+        calls, transport = self.transport(api, [
+            {'status': -419, 'message': 'ARTIFICIAL-ACCESS-SECRET'},
+            self.refresh_reply(), self.detail()])
+        with transport, patch('subprocess.run', side_effect=AssertionError('browser forbidden')):
+            self.assertEqual(api.WorkspaceAPI(self.settings).image_url(RID, CARD), URL)
+        self.assertEqual([r.get_method() for r in calls], ['GET', 'POST', 'GET'])
+        self.assertEqual(calls[1].get_header('Authorization'), 'Bearer ARTIFICIAL-REFRESH-SECRET')
+        self.assertEqual(calls[2].get_header('Authorization'), 'Bearer ARTIFICIAL-ROTATED-ACCESS')
+        saved = api._load_auth(Path(self.settings['state']) / 'web-auth/credentials.bin')
+        self.assertEqual(saved['refresh_token'], 'ARTIFICIAL-ROTATED-REFRESH')
+
     def test_http_401_get_refresh_is_bounded(self):
         from urllib.error import HTTPError
         api = self.boot()
@@ -172,12 +188,31 @@ class APITests(FixtureCase):
             api.WorkspaceAPI(self.settings).image_url(RID, CARD)
         self.assertEqual([r.get_method() for r in calls], ['GET', 'POST', 'GET'])
 
+    def test_workspace_expiry_retry_is_bounded_and_keeps_rotated_auth(self):
+        api = self.boot()
+        calls, transport = self.transport(api, [
+            {'status': -419}, self.refresh_reply(), {'status': -419}])
+        with transport, self.assertRaisesRegex(RuntimeError, '^IMAGE_WEB_LOGIN_REQUIRED$') as caught:
+            api.WorkspaceAPI(self.settings).image_url(RID, CARD)
+        self.assertEqual([r.get_method() for r in calls], ['GET', 'POST', 'GET'])
+        self.assertNotIn('ARTIFICIAL', str(caught.exception))
+        saved = api._load_auth(Path(self.settings['state']) / 'web-auth/credentials.bin')
+        self.assertEqual(saved['refresh_token'], 'ARTIFICIAL-ROTATED-REFRESH')
+
+    def test_expiry_after_proactive_refresh_does_not_refresh_twice(self):
+        api = self.boot(expires_in=30)
+        calls, transport = self.transport(api, [self.refresh_reply(), {'status': -419}])
+        with transport, self.assertRaisesRegex(RuntimeError, '^IMAGE_WEB_LOGIN_REQUIRED$'):
+            api.WorkspaceAPI(self.settings).image_url(RID, CARD)
+        self.assertEqual([r.get_method() for r in calls], ['POST', 'GET'])
+
     def test_invalid_refresh_requires_login_without_overwriting_auth(self):
         from urllib.error import HTTPError
         api = self.boot(expires_in=30)
         path = Path(self.settings['state']) / 'web-auth/credentials.bin'
         previous = path.read_bytes()
         for reply in [HTTPError(ORIGIN, 401, 'secret', Message(), None), {'status': 401, 'message': 'secret'},
+                      {'status': -419, 'message': 'secret'}, {'status': -420, 'message': 'secret'},
                       self.refresh_reply(expires_in=False), self.refresh_reply(workspace_id='other')]:
             calls, transport = self.transport(api, [reply])
             with transport, self.assertRaisesRegex(RuntimeError, '^IMAGE_WEB_LOGIN_REQUIRED$'):
