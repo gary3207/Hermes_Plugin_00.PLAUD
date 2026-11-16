@@ -143,7 +143,7 @@ class NativeBoardTest(unittest.TestCase):
                 self.assertEqual('done',card.status)
                 self.assertEqual('completed',run['outcome'])
                 self.assertEqual(first,run['task_id'])
-                self.assertIn('| 단계 |',card.body)
+                self.assertNotIn('미보고 / 기록 없음',card.body)
                 self.assertIn('신규 저장: 2',card.body)
                 self.assertIn('산출물 검증 통과: 2',card.body)
                 self.assertIn(active['token'],card.body)
@@ -188,13 +188,62 @@ class NativeBoardTest(unittest.TestCase):
         self.assertIn('| 단계 |',body)
         self.assertIn('신규 저장: 2',body)
         self.assertIn('완료',body)
-        for stage in ('1/4','2/4','3/4','4/4','3.1','3.2','3.3'):
-            self.assertIn(f'| {stage} |',body)
+        self.assertIn('| 1/4 |',body)
         self.assertIn('총 소요: 1분 00.000초',body)
-        self.assertIn('| 2/4 | 목록 조회 | 미보고 / 기록 없음 |',body)
-        self.assertIn('합산하지 않음',body)
+        self.assertNotIn('| 2/4 |',body)
+        self.assertNotIn('미보고 / 기록 없음',body)
         self.assertEqual('0분 00.000초',self.job.format_duration(-1))
         self.assertEqual('1분 00.000초',self.job.format_duration(59.9999))
+    def test_waiting_refresh_preserves_identity_and_refuses_ready(self):
+        from hermes_cli import kanban_db as db
+        from maintain_history import refresh
+        first=self.job.initialize('default',self.state)
+        journal=self.job.read(self.state/'journal.json')
+        backup=self.home/'waiting-backup.json'
+        with self.job.connect_closing(board='default') as conn:
+            before=dict(conn.execute('SELECT * FROM tasks WHERE id=?',(first,)).fetchone())
+            runs=[dict(r) for r in conn.execute('SELECT * FROM task_runs')]
+            self.assertTrue(refresh(conn,journal,first,'detailed plan',backup,waiting=True))
+            after=dict(conn.execute('SELECT * FROM tasks WHERE id=?',(first,)).fetchone())
+            before['body']='detailed plan'
+            self.assertEqual(before,after)
+            self.assertEqual(runs,[dict(r) for r in conn.execute('SELECT * FROM task_runs')])
+            self.assertFalse(refresh(conn,journal,first,'detailed plan',backup,waiting=True))
+            db.unblock_task(conn,first)
+            with self.assertRaises(RuntimeError):
+                refresh(conn,journal,first,'must not change',self.home/'other.json',waiting=True)
+            card=db.get_task(conn,first)
+            assert card is not None
+            self.assertEqual('detailed plan',card.body)
+
+    def test_history_refresh_preserves_run_and_refuses_wait_or_active_card(self):
+        from hermes_cli import kanban_db as db
+        from maintain_history import refresh
+        first=self.job.initialize('default',self.state)
+        journal=self.job.read(self.state/'journal.json')
+        backup=self.home/'history-backup.json'
+        with self.job.connect_closing(board='default') as conn:
+            with self.assertRaises(RuntimeError): refresh(conn,journal,first,'new',backup)
+            self.assertFalse(backup.exists())
+            db.unblock_task(conn,first)
+            claimed=db.claim_task(conn,first)
+            journal['cards'][first]['role']='history'
+            with self.assertRaises(RuntimeError): refresh(conn,journal,first,'new',backup)
+            db.complete_task(conn,first,result='brief',summary='brief')
+            rows=[dict(r) for r in conn.execute('SELECT * FROM task_runs')]
+            original=db.get_task(conn,first)
+            assert original is not None
+            self.assertTrue(refresh(conn,journal,first,'new',backup))
+            card=db.get_task(conn,first)
+            assert card is not None
+            self.assertEqual('new',card.body)
+            self.assertEqual(original.result,card.result)
+            self.assertEqual(rows,[dict(r) for r in conn.execute('SELECT * FROM task_runs')])
+            self.assertFalse(refresh(conn,journal,first,'new',backup))
+            with self.assertRaises(FileExistsError): refresh(conn,journal,first,'other',backup)
+            saved_card=db.get_task(conn,first)
+            assert saved_card is not None
+            self.assertEqual('new',saved_card.body)
     def test_supervisor_crash_recovery_stops_tree_before_new_wait(self):
         self.cancel_run(False, crash=True)
     def cancel_run(self, delete, crash=False):
