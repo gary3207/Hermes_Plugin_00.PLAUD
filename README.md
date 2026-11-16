@@ -24,6 +24,29 @@
 - 신규 노트는 출력 폴더 아래 녹음 날짜의 `YYYY/MM/`에 저장합니다. 예: `Meeting Minutes/2026/10/`. 날짜를 알 수 없으면 `날짜 미상/`에 저장합니다. 기존 노트는 자동 이동하지 않고 발견한 위치에서 갱신합니다.
 - 시각은 원본에 저장된 날짜·시각을 유지하며, 시간대를 추측하여 변환하지 않습니다. 숫자 epoch는 UTC로 해석합니다. 긴 제목은 파일명 길이 제한에 맞게 줄이되 본문·원래 제목은 그대로 유지합니다.
 
+## Summary 표지 이미지와 Vault 첨부 폴더
+
+Summary의 `plaud://image?type=summaryCard` 참조는 원문에 보존하고, 표지 원본 파일을 출력 폴더의 `_attachments/YYYY/MM/녹음-ID/카드-ID.확장자`에 저장해 로컬 임베드합니다. 원문과 한국어 번역에 같은 참조가 있어도 이미지 파일과 표시 블록은 하나만 사용합니다. PNG/JPEG/WebP 원본 바이트를 보존하며 최대 20 MiB, MIME·파일 서명·경로·소유권을 검사합니다. 알 수 없는 날짜는 `날짜 미상/`을 사용합니다.
+
+텍스트는 기존 공식 MCP, 표지는 별도 **Web workspace API 인증**을 사용합니다. 최초·재인증 때만 사용자의 외부 Aside에서 정상 Web 인증으로 새 workspace access/refresh 토큰을 발급받습니다. 기존 쿠키/localStorage/저장 토큰을 추출하지 않습니다. 새 인증 응답은 브라우저 페이지 안에서 일회용 키로 봉인한 뒤 전달하고, Windows 현재 사용자 DPAPI로 암호화하여 Vault 밖 `plugin-data/hermes-plaud/web-auth/credentials.bin`에 보관합니다. 토큰·서명 URL을 노트/로그/Git에 기록하지 않습니다.
+
+평상시 수집과 토큰 갱신은 Python HTTPS API로 수행하며 Aside·DOM·화면 캡처·브라우저 프로세스를 호출하지 않습니다. API Bearer는 검증한 workspace API origin에만 보내고, 이미지 저장소 요청에는 전달하지 않습니다. 초기 인증에는 기존 외부 Aside/CLI 및 Hermes에 포함된 cryptography가 필요하지만 브라우저 패키지나 새 Python 의존성을 설치하지 않습니다. 암호화 저장은 현재 Windows 사용자에 묶이며 다른 기기·사용자로 옮기면 다시 image-login을 해야 합니다.
+
+기존 단일 표지 Import 범위를 유지하며, 파일 상세의 정확한 `meta.file_id`와 `relation_content_mapping[표지 ID]`로 원본을 연결합니다. 구형 `oc_su_..._iN`도 같은 API를 사용하며 파일명·순서·접두어 변환으로 추측하지 않습니다. 표지가 여러 개이거나 참조 목록이 불완전하면 이미지 실패로 보고하고 정상 텍스트를 보존합니다.
+
+```text
+hermes plaud image-login
+hermes plaud images
+```
+
+첫 명령은 공식 MCP current-user와 같은 계정/workspace인지 확인하고, 외부 Aside의 정상 Web 인증으로 API 토큰을 발급·암호화 저장합니다. 로그인하지 않았다면 Aside를 열고 authenticated:false를 반환하므로 사용자가 로그인한 뒤 image-login을 다시 실행합니다. 창을 연 것만으로 성공을 표시하지 않습니다. 두 번째 명령은 브라우저·MCP 원문 조회·모델 번역 없이 기존 소유 Summary의 이미지만 보완합니다. 변경 노트는 private `backups/media-*`, 결과는 `last-media-report.json`에 보관하며 기존 업무 Import의 `last-report.json`과 실행 History를 변경하지 않습니다.
+
+Aside 프로필을 지정하려면 `aside host profiles --host local`로 확인한 ID를 `hermes config set plugins.entries.hermes-plaud.settings.aside_profile "<Aside profile ID>"`로 저장합니다. Aside 전역 기본 프로필이나 다른 계정 설정은 바꾸지 않습니다.
+
+일반 `sync`와 Kanban Import에서도 Summary 표지를 처리합니다. 텍스트가 변경되지 않아도 이미지 상태는 확인하며, 같은 바이트의 이미지·노트는 다시 쓰지 않습니다. 현재는 표지 변경을 놓치지 않도록 수동 실행마다 이미지 원본을 조회하므로 네트워크 다운로드 자체를 생략한다고 보장하지 않습니다. 누락된 로컬 이미지는 재번역 없이 복구합니다. 이미지 실패 시 이미 저장된 원문·번역과 정상 노트는 보존하고 실패를 표시하며, 이미지 로그인이 필요하면 `IMAGE_WEB_LOGIN_REQUIRED`를 보고합니다.
+
+이 기능은 Summary 표지를 대상으로 합니다. 녹음 중 사진 첨부·Ask Plaud의 별도 Infographic·SVG/GIF는 이번 지원 범위가 아닙니다. 공개 MCP 이미지 API가 아닌 내부 Web API이므로 서버 계약 변경 시 유지보수가 필요합니다. refresh 만료·철회·SSO 요구 시 image-login 재인증이 필요하며 최초 로그인 한 번으로 영구 무인 동작을 보장하지 않습니다. 인증이 없을 때 업무 실행이 자동으로 브라우저를 띄우는 fallback은 없습니다. 오프라인 테스트와 실제 계정·설치·이미지 검증은 별도로 구분합니다.
+
 ## 기존 암호형 파일명 변경 (v1.0.1)
 
 정상 Import에서도 소유권을 확인한 기존 파일명을 자동 갱신합니다. 원문이 같으면 파일명만 바꾸고 재번역하지 않습니다. 계정·모델 호출 없이 기존 노트만 바꾸려면 설치본 또는 프로젝트의 `rename_notes.py`를 실행합니다.
@@ -53,7 +76,7 @@
 - 기존 Obsidian vault와 vault 아래의 출력 폴더 이름을 준비합니다.
 - PLAUD 로그인과 Hermes 모델 인증은 별도입니다. 비밀번호·인증코드·토큰을 채팅에 제공하지 마세요.
 - 번역에 실제 모델 요청이 발생할 수 있습니다. 긴 기록의 최초 전체 번역은 오래 걸릴 수 있습니다.
-- 공식 npm `@plaud-ai/mcp@0.3.14`를 사용합니다. 비공식 PLAUD API를 별도 구현하지 않습니다.
+- 텍스트 수집은 공식 npm `@plaud-ai/mcp@0.3.14`를 사용합니다. Summary 표지는 최초·재인증에만 외부 Aside를 사용하며, 평상시 원본 URL 조회·다운로드·토큰 갱신은 직접 HTTPS API로 처리합니다.
 
 ## GitHub에서 설치
 

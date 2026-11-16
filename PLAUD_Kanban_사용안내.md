@@ -15,7 +15,7 @@
 
 먼저 [README](README.md)에 따라 같은 Profile에 `hermes-plaud`를 설치·활성화하고 vault·출력 폴더·PLAUD 로그인·모델 인증을 준비합니다. 실행마다 동일 Profile의 `HERMES_HOME`을 사용하세요. 기존 계정의 인증·원문 캐시를 저장소에서 가져오는 방식은 아닙니다.
 
-그다음 비공개 저장소 접근 권한이 있는 GitHub 계정으로 연결 플러그인을 설치합니다.
+그다음 같은 Profile에 연결 플러그인을 설치합니다.
 
 ```text
 hermes plugins install gary3207/Hermes_Plugin_00.PLAUD/source/kanban --no-enable --yes-deps
@@ -69,6 +69,12 @@ Description과 대기 카드에는 준비(출력 경로·잠금 → 기존 노�
 인증이 필요하면 Hermes에 PLAUD 재로그인을 요청하세요. Agent는 `hermes plaud login --aside`를 백그라운드로 실행하고 출력된 공식 OAuth URL을 Aside 브라우저에 엽니다. 사용자가 직접 로그인·승인하면 기존 공식 SDK가 PKCE와 localhost:8199 callback으로 인증을 저장합니다. 대기는 10분이며, Agent는 인증 결과와 최소 목록 조회를 확인합니다. 로그인 중 비밀번호·인증코드를 채팅에 보내지 마세요. 실패한 Import나 새 대기 카드는 자동 재실행하지 않습니다.
 
 Aside 연결은 고정된 공식 MCP 0.3.14 SDK를 재사용합니다. 다른 버전의 내부 구조는 임의로 추정하지 않고 실패 처리하며 검토 후 지원합니다. 공식 문서의 `list_files` 검색·날짜 필터는 선택적 기능이므로 전체 Import에는 추가하지 않습니다.
+
+### Summary 원본 표지 인증
+
+Summary 표지를 함께 가져오려면 공식 MCP 로그인과 별도로 `hermes plaud image-login`을 한 번 실행합니다. 동일한 PLAUD 계정·workspace로 로그인된 **외부 Aside 브라우저**를 사용하며 Hermes 내부 preview나 기본 Edge로 대체하지 않습니다. 이후 일반 Job의 이미지 URL 조회·다운로드·토큰 갱신은 직접 API로 처리하고 브라우저를 자동 실행하지 않습니다.
+
+원본은 출력 폴더 아래 `_attachments/YYYY/MM/<녹음-ID>/`에 저장하고 Summary에 로컬 임베드합니다. 기존 노트의 이미지만 보완하려면 `hermes plaud images`를 사용합니다. 이 명령은 전체 Import나 재번역이 아닙니다. 이미지 인증 만료·계정 불일치 시 안내에 따라 `hermes plaud image-login`으로 재인증하고, 실패한 Job이나 대기 카드는 자동 재실행하지 않습니다. 인증정보는 Vault 밖에 Windows 사용자별 DPAPI로 암호화해 저장하며 Git으로 복구하지 않습니다.
 
 ## 번역 연결 복구와 원문 보존
 

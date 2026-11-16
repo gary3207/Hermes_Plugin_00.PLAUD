@@ -9,7 +9,7 @@ import sys
 # Hermes imports directory plugins under an isolated namespace.
 if str(Path(__file__).parent) not in sys.path:
     sys.path.insert(0, str(Path(__file__).parent))
-from plaud_obsidian.engine import paths, safe_error, sync
+from plaud_obsidian.engine import paths, safe_error, sync, sync_existing_media
 from plaud_obsidian.provider import NativePlaud
 from plaud_obsidian.translation import Translator, register_task
 
@@ -25,7 +25,7 @@ def parser(existing=None):
     configure = commands.add_parser('configure', add_help=False)
     configure.add_argument('--vault', required=True)
     configure.add_argument('--output', required=True)
-    for name in ('status', 'login', 'sync'):
+    for name in ('status', 'login', 'sync', 'image-login', 'images'):
         command = commands.add_parser(name, add_help=False)
         if name == 'login':
             command.add_argument('--aside', action='store_true',
@@ -37,6 +37,7 @@ def settings(ctx):
     from hermes_constants import get_hermes_home
     state = get_hermes_home() / 'plugin-data' / 'hermes-plaud'
     return {'vault': ctx.get_config('vault', ''), 'output': ctx.get_config('output', ''),
+            'aside_profile': ctx.get_config('aside_profile', ''),
             'state': str(state), 'runtime': str(state / 'runtime'),
             'node': str(Path(shutil.which('node') or 'missing-node').resolve())}
 
@@ -59,6 +60,11 @@ def execute(ctx, args):
         if args.action == 'login' and getattr(args, 'aside', False):
             from plaud_obsidian.aside_login import run_login
             return json.dumps({'authenticated': run_login(config) == 0})
+        if args.action == 'image-login':
+            from plaud_obsidian.web_media import open_login
+            return json.dumps(open_login(config))
+        if args.action == 'images':
+            return json.dumps(sync_existing_media(config), ensure_ascii=False)
         with NativePlaud(config) as source:
             if args.action == 'login':
                 return json.dumps(source.login())
@@ -80,6 +86,6 @@ def register(ctx):
         except Exception as exc:
             return json.dumps({'success': False, 'error': safe_error(exc)})
     ctx.register_command('plaud', command, description='수동 PLAUD 원문·전체 한국어 번역 Import',
-                         args_hint='configure|status|login|sync', argument_mode='text')
+                         args_hint='configure|status|login|sync|image-login|images', argument_mode='text')
     ctx.register_cli_command('plaud', 'Manual PLAUD to Obsidian import', parser,
                              lambda args: print(execute(ctx, args)))

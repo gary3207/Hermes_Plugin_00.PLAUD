@@ -1,5 +1,14 @@
 # Verification
 
+## 2026-11-16 original Summary images and direct workspace API
+
+- Summary-card originals are stored below the configured Vault output folder's `_attachments/YYYY/MM/<record-id>/` and embedded locally. Source text, Korean translations, successful text/translation caches and existing note locations remain preserved. Image-only backfill is separate from Import and translation.
+- Normal image URL resolution, download and token refresh use direct HTTPS. Initial authentication and explicit reauthentication use the external Aside browser to obtain newly issued workspace credentials; existing browser cookies, localStorage and saved tokens are not extracted. Credentials are encrypted with current-user Windows DPAPI outside the Vault and are never part of Git or the source ZIP.
+- The final Windows offline engine suite ran 152 tests with zero failures/errors and one skipped symlink-privilege test; the actual junction test passed. Independent security review found no confirmed P1/P2 issue and independently reran the same suite. The earlier media-stage connector suite passed 48 tests; that is not a new connector-suite run for the API delta.
+- The API candidate passed native plugin validation and Doctor. Its 12 production files matched the installed payload. Authorized live checks separately established fresh workspace issuance, direct refresh, exact card mapping, original-image byte equality and installed image-only repeats with browser/subprocess, MCP and model callbacks forbidden. The actual image-only CLI repeat also succeeded. Existing notes, images, caches and connector/journal state were preserved.
+- Image resolution requires an exact recording/card mapping and retains the single-distinct-card restriction. Redirects, identity mismatches and malformed responses fail closed; ordinary image processing has no browser fallback. This relies on PLAUD's internal Web API rather than a promised public media API, so endpoint changes, refresh expiry or SSO can require maintenance or `hermes plaud image-login`.
+- Publication excludes private images, live identifiers, authentication, operation evidence and Vault contents. This publication does not rerun full Import/translation, replace installed plugins, move cards, change schedules or rewrite earlier releases. Fresh-machine installation and long-term refresh/SSO behavior remain unverified.
+
 ## 2026-10-23 year/month folders
 
 - New notes route through the shared filename/date parser into `YYYY/MM/`; unknown dates use `날짜 미상/`. Source wall-clock dates and existing-note locations are retained. Recursive indexing and final Kanban verification recognize organized notes without a second index or cache-identity change.
